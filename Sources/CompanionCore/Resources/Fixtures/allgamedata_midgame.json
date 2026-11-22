@@ -1,0 +1,567 @@
+{
+  "activePlayer": {
+    "summonerName": "poopdog#swag",
+    "currentGold": 2100.0,
+    "level": 11,
+    "championStats": {
+      "abilityPower": 0,
+      "armor": 45,
+      "attackDamage": 150,
+      "magicResist": 38,
+      "maxHealth": 1800,
+      "currentHealth": 1200
+    },
+    "fullRunes": {
+      "keystone": {
+        "id": 8008,
+        "displayName": "Lethal Tempo"
+      },
+      "primaryRuneTree": {
+        "id": 8000
+      },
+      "secondaryRuneTree": {
+        "id": 8100
+      }
+    }
+  },
+  "allPlayers": [
+    {
+      "championName": "Jinx",
+      "rawChampionName": "game_character_displayname_Jinx",
+      "isBot": false,
+      "isDead": false,
+      "respawnTimer": 0.0,
+      "level": 11,
+      "position": "BOTTOM",
+      "team": "ORDER",
+      "items": [
+        {
+          "itemID": 3032,
+          "displayName": "Yun Tal Wildarrows",
+          "count": 1,
+          "slot": 0,
+          "price": 1000
+        },
+        {
+          "itemID": 3006,
+          "displayName": "Berserker's Greaves",
+          "count": 1,
+          "slot": 1,
+          "price": 1000
+        },
+        {
+          "itemID": 1055,
+          "displayName": "Doran's Blade",
+          "count": 1,
+          "slot": 2,
+          "price": 1000
+        }
+      ],
+      "runes": {
+        "keystone": {
+          "id": 8008,
+          "displayName": "Lethal Tempo"
+        },
+        "primaryRuneTree": {
+          "id": 8000
+        },
+        "secondaryRuneTree": {
+          "id": 8100
+        }
+      },
+      "scores": {
+        "kills": 3,
+        "deaths": 2,
+        "assists": 4,
+        "creepScore": 140,
+        "wardScore": 8.5
+      },
+      "summonerName": "poopdog#swag"
+    },
+    {
+      "championName": "Garen",
+      "rawChampionName": "game_character_displayname_Garen",
+      "isBot": false,
+      "isDead": false,
+      "respawnTimer": 0.0,
+      "level": 11,
+      "position": "TOP",
+      "team": "ORDER",
+      "items": [
+        {
+          "itemID": 6630,
+          "displayName": "Goredrinker",
+          "count": 1,
+          "slot": 0,
+          "price": 1000
+        },
+        {
+          "itemID": 3111,
+          "displayName": "Mercury's Treads",
+          "count": 1,
+          "slot": 1,
+          "price": 1000
+        }
+      ],
+      "runes": {
+        "keystone": {
+          "id": 8010,
+          "displayName": "Conqueror"
+        },
+        "primaryRuneTree": {
+          "id": 8000
+        },
+        "secondaryRuneTree": {
+          "id": 8100
+        }
+      },
+      "scores": {
+        "kills": 2,
+        "deaths": 3,
+        "assists": 5,
+        "creepScore": 120,
+        "wardScore": 8.5
+      },
+      "summonerName": "GarenMain#EUW",
+      "riotId": "GarenMain#EUW",
+      "riotIdGameName": "GarenMain",
+      "riotIdTagLine": "EUW"
+    },
+    {
+      "championName": "Lee Sin",
+      "rawChampionName": "game_character_displayname_LeeSin",
+      "isBot": false,
+      "isDead": false,
+      "respawnTimer": 0.0,
+      "level": 11,
+      "position": "JUNGLE",
+      "team": "ORDER",
+      "items": [
+        {
+          "itemID": 3084,
+          "displayName": "Heartsteel",
+          "count": 1,
+          "slot": 0,
+          "price": 1000
+        },
+        {
+          "itemID": 3111,
+          "displayName": "Mercury's Treads",
+          "count": 1,
+          "slot": 1,
+          "price": 1000
+        }
+      ],
+      "runes": {
+        "keystone": {
+          "id": 8010,
+          "displayName": "Conqueror"
+        },
+        "primaryRuneTree": {
+          "id": 8000
+        },
+        "secondaryRuneTree": {
+          "id": 8100
+        }
+      },
+      "scores": {
+        "kills": 4,
+        "deaths": 3,
+        "assists": 6,
+        "creepScore": 90,
+        "wardScore": 8.5
+      },
+      "summonerName": "LeeFan#EUW",
+      "riotId": "LeeFan#EUW",
+      "riotIdGameName": "LeeFan",
+      "riotIdTagLine": "EUW"
+    },
+    {
+      "championName": "Ahri",
+      "rawChampionName": "game_character_displayname_Ahri",
+      "isBot": false,
+      "isDead": false,
+      "respawnTimer": 0.0,
+      "level": 11,
+      "position": "MIDDLE",
+      "team": "ORDER",
+      "items": [
+        {
+          "itemID": 3020,
+          "displayName": "Sorcerer's Shoes",
+          "count": 1,
+          "slot": 0,
+          "price": 1000
+        },
+        {
+          "itemID": 3157,
+          "displayName": "Zhonya's Hourglass",
+          "count": 1,
+          "slot": 1,
+          "price": 1000
+        }
+      ],
+      "runes": {
+        "keystone": {
+          "id": 8112,
+          "displayName": "Electrocute"
+        },
+        "primaryRuneTree": {
+          "id": 8000
+        },
+        "secondaryRuneTree": {
+          "id": 8100
+        }
+      },
+      "scores": {
+        "kills": 5,
+        "deaths": 2,
+        "assists": 7,
+        "creepScore": 130,
+        "wardScore": 8.5
+      },
+      "summonerName": "AhriOtp#EUW",
+      "riotId": "AhriOtp#EUW",
+      "riotIdGameName": "AhriOtp",
+      "riotIdTagLine": "EUW"
+    },
+    {
+      "championName": "Nami",
+      "rawChampionName": "game_character_displayname_Nami",
+      "isBot": false,
+      "isDead": false,
+      "respawnTimer": 0.0,
+      "level": 11,
+      "position": "UTILITY",
+      "team": "ORDER",
+      "items": [
+        {
+          "itemID": 3158,
+          "displayName": "Ionian Boots of Lucidity",
+          "count": 1,
+          "slot": 0,
+          "price": 1000
+        },
+        {
+          "itemID": 2003,
+          "displayName": "Health Potion",
+          "count": 1,
+          "slot": 1,
+          "price": 1000
+        }
+      ],
+      "runes": {
+        "keystone": {
+          "id": 8214,
+          "displayName": "Summon Aery"
+        },
+        "primaryRuneTree": {
+          "id": 8000
+        },
+        "secondaryRuneTree": {
+          "id": 8100
+        }
+      },
+      "scores": {
+        "kills": 0,
+        "deaths": 3,
+        "assists": 12,
+        "creepScore": 25,
+        "wardScore": 8.5
+      },
+      "summonerName": "NamiSupp#EUW",
+      "riotId": "NamiSupp#EUW",
+      "riotIdGameName": "NamiSupp",
+      "riotIdTagLine": "EUW"
+    },
+    {
+      "championName": "Aatrox",
+      "rawChampionName": "game_character_displayname_Aatrox",
+      "isBot": false,
+      "isDead": false,
+      "respawnTimer": 0.0,
+      "level": 11,
+      "position": "TOP",
+      "team": "CHAOS",
+      "items": [
+        {
+          "itemID": 6610,
+          "displayName": "Sundered Sky",
+          "count": 1,
+          "slot": 0,
+          "price": 1000
+        },
+        {
+          "itemID": 3074,
+          "displayName": "Ravenous Hydra",
+          "count": 1,
+          "slot": 1,
+          "price": 1000
+        }
+      ],
+      "runes": {
+        "keystone": {
+          "id": 8010,
+          "displayName": "Conqueror"
+        },
+        "primaryRuneTree": {
+          "id": 8000
+        },
+        "secondaryRuneTree": {
+          "id": 8100
+        }
+      },
+      "scores": {
+        "kills": 4,
+        "deaths": 2,
+        "assists": 3,
+        "creepScore": 150,
+        "wardScore": 8.5
+      },
+      "summonerName": "AatroxMain#NA1",
+      "riotId": "AatroxMain#NA1",
+      "riotIdGameName": "AatroxMain",
+      "riotIdTagLine": "NA1"
+    },
+    {
+      "championName": "Sion",
+      "rawChampionName": "game_character_displayname_Sion",
+      "isBot": false,
+      "isDead": false,
+      "respawnTimer": 0.0,
+      "level": 11,
+      "position": "JUNGLE",
+      "team": "CHAOS",
+      "items": [
+        {
+          "itemID": 3068,
+          "displayName": "Sunfire Aegis",
+          "count": 1,
+          "slot": 0,
+          "price": 1000
+        },
+        {
+          "itemID": 3742,
+          "displayName": "Dead Man's Plate",
+          "count": 1,
+          "slot": 1,
+          "price": 1000
+        },
+        {
+          "itemID": 3047,
+          "displayName": "Plated Steelcaps",
+          "count": 1,
+          "slot": 2,
+          "price": 1000
+        }
+      ],
+      "runes": {
+        "keystone": {
+          "id": 8437,
+          "displayName": "Grasp of the Undying"
+        },
+        "primaryRuneTree": {
+          "id": 8000
+        },
+        "secondaryRuneTree": {
+          "id": 8100
+        }
+      },
+      "scores": {
+        "kills": 2,
+        "deaths": 3,
+        "assists": 5,
+        "creepScore": 100,
+        "wardScore": 8.5
+      },
+      "summonerName": "SionJg#NA1",
+      "riotId": "SionJg#NA1",
+      "riotIdGameName": "SionJg",
+      "riotIdTagLine": "NA1"
+    },
+    {
+      "championName": "Zed",
+      "rawChampionName": "game_character_displayname_Zed",
+      "isBot": false,
+      "isDead": false,
+      "respawnTimer": 0.0,
+      "level": 11,
+      "position": "MIDDLE",
+      "team": "CHAOS",
+      "items": [
+        {
+          "itemID": 3142,
+          "displayName": "Youmuu's Ghostblade",
+          "count": 1,
+          "slot": 0,
+          "price": 1000
+        },
+        {
+          "itemID": 3814,
+          "displayName": "Edge of Night",
+          "count": 1,
+          "slot": 1,
+          "price": 1000
+        }
+      ],
+      "runes": {
+        "keystone": {
+          "id": 8112,
+          "displayName": "Electrocute"
+        },
+        "primaryRuneTree": {
+          "id": 8000
+        },
+        "secondaryRuneTree": {
+          "id": 8100
+        }
+      },
+      "scores": {
+        "kills": 6,
+        "deaths": 1,
+        "assists": 2,
+        "creepScore": 160,
+        "wardScore": 8.5
+      },
+      "summonerName": "ZedGod#NA1",
+      "riotId": "ZedGod#NA1",
+      "riotIdGameName": "ZedGod",
+      "riotIdTagLine": "NA1"
+    },
+    {
+      "championName": "Draven",
+      "rawChampionName": "game_character_displayname_Draven",
+      "isBot": false,
+      "isDead": false,
+      "respawnTimer": 0.0,
+      "level": 11,
+      "position": "BOTTOM",
+      "team": "CHAOS",
+      "items": [
+        {
+          "itemID": 3031,
+          "displayName": "Infinity Edge",
+          "count": 1,
+          "slot": 0,
+          "price": 1000
+        },
+        {
+          "itemID": 3072,
+          "displayName": "Bloodthirster",
+          "count": 1,
+          "slot": 1,
+          "price": 1000
+        }
+      ],
+      "runes": {
+        "keystone": {
+          "id": 8128,
+          "displayName": "Dark Harvest"
+        },
+        "primaryRuneTree": {
+          "id": 8000
+        },
+        "secondaryRuneTree": {
+          "id": 8100
+        }
+      },
+      "scores": {
+        "kills": 5,
+        "deaths": 2,
+        "assists": 4,
+        "creepScore": 170,
+        "wardScore": 8.5
+      },
+      "summonerName": "DravenKing#NA1",
+      "riotId": "DravenKing#NA1",
+      "riotIdGameName": "DravenKing",
+      "riotIdTagLine": "NA1"
+    },
+    {
+      "championName": "Soraka",
+      "rawChampionName": "game_character_displayname_Soraka",
+      "isBot": false,
+      "isDead": false,
+      "respawnTimer": 0.0,
+      "level": 11,
+      "position": "UTILITY",
+      "team": "CHAOS",
+      "items": [
+        {
+          "itemID": 6617,
+          "displayName": "Moonstone Renewer",
+          "count": 1,
+          "slot": 0,
+          "price": 1000
+        }
+      ],
+      "runes": {
+        "keystone": {
+          "id": 8214,
+          "displayName": "Summon Aery"
+        },
+        "primaryRuneTree": {
+          "id": 8000
+        },
+        "secondaryRuneTree": {
+          "id": 8100
+        }
+      },
+      "scores": {
+        "kills": 0,
+        "deaths": 2,
+        "assists": 10,
+        "creepScore": 30,
+        "wardScore": 8.5
+      },
+      "summonerName": "SorakaHeal#NA1",
+      "riotId": "SorakaHeal#NA1",
+      "riotIdGameName": "SorakaHeal",
+      "riotIdTagLine": "NA1"
+    }
+  ],
+  "events": {
+    "Events": [
+      {
+        "EventID": 0,
+        "EventName": "GameStart",
+        "EventTime": 0.0
+      },
+      {
+        "EventID": 3,
+        "EventName": "ChampionKill",
+        "EventTime": 410.5,
+        "KillerName": "Zed",
+        "VictimName": "poopdog",
+        "Assisters": []
+      },
+      {
+        "EventID": 7,
+        "EventName": "ChampionKill",
+        "EventTime": 655.0,
+        "KillerName": "Draven",
+        "VictimName": "poopdog",
+        "Assisters": [
+          "Soraka"
+        ]
+      },
+      {
+        "EventID": 9,
+        "EventName": "ChampionKill",
+        "EventTime": 700.0,
+        "KillerName": "poopdog",
+        "VictimName": "Zed",
+        "Assisters": [
+          "Nami"
+        ]
+      }
+    ]
+  },
+  "gameData": {
+    "gameMode": "CLASSIC",
+    "gameTime": 900.0,
+    "mapName": "Map11",
+    "mapNumber": 11,
+    "mapTerrain": "Default"
+  }
+}

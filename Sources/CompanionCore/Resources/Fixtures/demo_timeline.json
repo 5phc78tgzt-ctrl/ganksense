@@ -1,0 +1,50 @@
+{
+  "comment": "Demo game for --demo. Roster/runes come from base fixture; each step patches it cumulatively (players by championName: level, items, kda [k,d,a], cs, dead, respawn; t = gameTime; gold = my current gold; events are appended).",
+  "base": "allgamedata_midgame",
+  "steps": [
+    { "loading": true },
+    {
+      "t": 420, "gold": 650,
+      "players": {
+        "Jinx":   { "level": 6, "items": [1055, 1001, 3340], "kda": [0, 0, 1], "cs": 48 },
+        "Garen":  { "level": 7, "items": [1054, 1001], "kda": [1, 0, 0], "cs": 45 },
+        "Lee Sin":{ "level": 6, "items": [1036, 1001], "kda": [1, 1, 1], "cs": 30 },
+        "Ahri":   { "level": 7, "items": [1056, 3802], "kda": [0, 0, 1], "cs": 50 },
+        "Nami":   { "level": 5, "items": [3865, 1001], "kda": [0, 0, 2], "cs": 6 },
+        "Aatrox": { "level": 7, "items": [1055, 3133], "kda": [1, 1, 0], "cs": 46 },
+        "Sion":   { "level": 6, "items": [1054, 1029, 1028], "kda": [0, 0, 1], "cs": 28 },
+        "Zed":    { "level": 7, "items": [3142], "kda": [1, 0, 0], "cs": 52 },
+        "Draven": { "level": 6, "items": [1055, 1038], "kda": [0, 0, 0], "cs": 50 },
+        "Soraka": { "level": 6, "items": [3865, 1001], "kda": [0, 0, 0], "cs": 5 }
+      },
+      "events": [
+        { "EventID": 0, "EventName": "GameStart", "EventTime": 0.0 },
+        { "EventID": 1, "EventName": "ChampionKill", "EventTime": 301.0, "KillerName": "Aatrox", "VictimName": "Lee Sin", "Assisters": [] },
+        { "EventID": 2, "EventName": "ChampionKill", "EventTime": 355.0, "KillerName": "Garen", "VictimName": "Aatrox", "Assisters": ["Lee Sin"] },
+        { "EventID": 3, "EventName": "ChampionKill", "EventTime": 398.0, "KillerName": "Lee Sin", "VictimName": "Zed", "Assisters": ["Ahri", "poopdog"] }
+      ]
+    },
+    { "t": 480, "gold": 1350, "players": { "Jinx": { "cs": 57 }, "Zed": { "kda": [2, 1, 0] } },
+      "events": [ { "EventID": 4, "EventName": "ChampionKill", "EventTime": 460.0, "KillerName": "Zed", "VictimName": "Ahri", "Assisters": [] } ] },
+    { "t": 600, "gold": 300,
+      "players": {
+        "Jinx":   { "level": 8, "items": [3032, 1001, 3340], "cs": 74 },
+        "Aatrox": { "level": 8, "items": [1055, 3074] },
+        "Soraka": { "level": 7, "items": [6617, 1001] }
+      } },
+    { "t": 660, "gold": 1200, "players": { "Jinx": { "items": [3032, 3006, 3340], "cs": 82 } } },
+    { "t": 690, "gold": 1500, "players": { "Jinx": { "level": 9, "cs": 88 } },
+      "events": [ { "EventID": 20, "EventName": "ChampionKill", "EventTime": 684.0, "KillerName": "Zed", "VictimName": "AhriOtp", "Assisters": ["SionJg"] } ] },
+    { "t": 750, "gold": 1950, "players": { "Zed": { "level": 9, "items": [3142, 3814], "kda": [3, 1, 0] } },
+      "events": [ { "EventID": 21, "EventName": "DragonKill", "EventTime": 745.0, "KillerName": "DravenKing", "Assisters": ["SorakaHeal"] } ] },
+    { "t": 780, "gold": 2050,
+      "players": { "Jinx": { "kda": [0, 1, 1], "dead": true, "respawn": 22 }, "Zed": { "kda": [4, 1, 0] }, "Sion": { "dead": true, "respawn": 28 } },
+      "events": [ { "EventID": 5, "EventName": "ChampionKill", "EventTime": 776.0, "KillerName": "Zed", "VictimName": "poopdog", "Assisters": [] } ] },
+    { "t": 810, "gold": 2300, "players": { "Jinx": { "dead": false, "respawn": 0, "cs": 91 }, "Sion": { "dead": false, "respawn": 0 } } },
+    { "t": 830, "gold": 2350,
+      "players": { "Jinx": { "kda": [0, 2, 1], "dead": true, "respawn": 24 }, "Draven": { "level": 9, "kda": [1, 0, 0] }, "Soraka": { "kda": [0, 0, 1] } },
+      "events": [ { "EventID": 6, "EventName": "ChampionKill", "EventTime": 826.5, "KillerName": "Draven", "VictimName": "poopdog", "Assisters": ["Soraka"] } ] },
+    { "t": 900, "gold": 2600, "players": { "Jinx": { "dead": false, "respawn": 0, "cs": 99 } },
+      "events": [ { "EventID": 7, "EventName": "GameEnd", "EventTime": 900.0, "Result": "Lose" } ] }
+  ]
+}

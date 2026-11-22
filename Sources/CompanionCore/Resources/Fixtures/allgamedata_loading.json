@@ -1,0 +1,13 @@
+{
+  "allPlayers": [],
+  "events": {
+    "Events": []
+  },
+  "gameData": {
+    "gameMode": "CLASSIC",
+    "gameTime": 0.0,
+    "mapName": "Map11",
+    "mapNumber": 11,
+    "mapTerrain": "Default"
+  }
+}
