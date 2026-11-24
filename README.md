@@ -48,6 +48,8 @@ The overlay is hidden by default. It appears when something important happens, w
 - **One goal per game.** Pick one before the game: deaths before 14:00, CS at 10:00, CS per minute at 20:00, kill participation, deaths this game or gold at 15:00. You can set your own targets.
 - **Tilt guard.** A calm break reminder after a loss streak or after a long session.
 
+<p align="center"><img src="docs/images/settings-goals.png" alt="Goal targets in Settings" width="440"></p>
+
 <table align="center">
 <tr>
 <td valign="top"><img src="docs/images/popover-in-game.png" alt="The menu bar window during a game" width="300"></td>
@@ -56,8 +58,6 @@ The overlay is hidden by default. It appears when something important happens, w
 </table>
 
 Builds come from OP.GG when "Use OP.GG builds" is on (Settings > General). With it off, the app uses its own built-in builds and makes no OP.GG requests. Overlay position, size and the optional lines are in Settings > Overlay.
-
-<p align="center"><img src="docs/images/settings-goals.png" alt="Goal targets in Settings" width="440"></p>
 
 ## Requirements
 
