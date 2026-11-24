@@ -98,14 +98,10 @@ ganksense only uses Riot's official local APIs and public static data. It does n
 
 ## Permissions
 
-ganksense asks macOS for two optional permissions. The app runs without them.
+ganksense needs no macOS permissions. It does not ask for Input Monitoring, Screen Recording or Accessibility.
 
-| Permission | Why | If you refuse |
-|---|---|---|
-| **Input Monitoring** | To check if Tab is held, so the overlay shows while you hold it. Only the Tab key's state is read; keys are never recorded. | Holding Tab does not show the overlay. |
-| **Screen Recording** | To find where the game and client windows are, so the overlay and champ select banner line up. Only window positions are read, never the screen contents. | The overlay and banner open on your main screen. |
-
-You can change both in System Settings > Privacy & Security.
+- To show the overlay while you hold **Tab**, it reads only whether the Tab key is down. Nothing is recorded.
+- To place the overlay and the champ select banner, it reads only the position of the League windows, never their contents or titles.
 
 ## Legal
 

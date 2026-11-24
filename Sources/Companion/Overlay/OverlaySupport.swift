@@ -1,8 +1,8 @@
 import AppKit
 import CompanionCore
 
-/// the display hosting the league game window. reads only window owner names and bounds, never titles or contents. macOS may ask for
-/// screen recording for this call; without it the overlay uses the main screen.
+/// the display hosting the league game window. reads only window owner names and bounds, never titles or contents. needs no macos
+/// permission (titles are what screen recording would unlock, and they are not read).
 @MainActor
 enum GameScreen {
     private static let owners: Set<String> = ["LeagueofLegends", "League of Legends"]

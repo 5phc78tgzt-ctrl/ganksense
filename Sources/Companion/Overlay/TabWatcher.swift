@@ -3,8 +3,8 @@ import Carbon.HIToolbox
 import CompanionCore
 
 /// hold-tab for the overlay. while enabled (see `tabgate`), samples whether tab is down at 20 hz with the public
-/// `cgeventsource.keystate` api: no event tap, nothing synthesized and nothing recorded. macOS may still ask for
-/// input monitoring for this call; without it the key reads as up. the timer exists only while enabled; otherwise nothing runs.
+/// `cgeventsource.keystate` api: no event tap, nothing synthesized and nothing recorded. needs no macos permission:
+/// no input monitoring prompt appears (checked with an ungranted test app). the timer exists only while enabled; otherwise nothing runs.
 ///
 /// "league's game window is frontmost" comes from `nsworkspace.frontmostapplication` (bundle id
 /// `com.riotgames.leagueoflegends.gameclient`, or the `leagueoflegends` executable), kept current by the
