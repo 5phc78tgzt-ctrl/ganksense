@@ -170,13 +170,16 @@ final class OverlayController {
     @discardableResult
     private func applyLayout() -> Bool {
         let settings = coordinator.settings
-        var requested = settings.overlayScale
-        // hidden screenshot flag `--overlay-scale <value>`: previews a size without touching settings.
-        let args = CommandLine.arguments
-        if let i = args.firstIndex(of: "--overlay-scale"), i + 1 < args.count, let v = Double(args[i + 1]) { requested = v }
+        let requested = settings.overlayScale
         let area = targetArea()
-        let scale = Self.fittedScale(corner: settings.overlayCorner,
+        var scale = Self.fittedScale(corner: settings.overlayCorner,
                                      scale: CGFloat(min(max(requested, 0.6), 1.6)) * Self.screenFactor(area), area: area)
+        // hidden screenshot flag `--overlay-scale <value>`: that exact size, without touching settings or fitting
+        // it to this screen.
+        let args = CommandLine.arguments
+        if let i = args.firstIndex(of: "--overlay-scale"), i + 1 < args.count, let v = Double(args[i + 1]) {
+            scale = CGFloat(min(max(v, 0.6), 1.6))
+        }
         let changed = scale != self.scale || settings.overlayCorner != corner
         self.scale = scale
         corner = settings.overlayCorner

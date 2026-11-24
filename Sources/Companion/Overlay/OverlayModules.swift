@@ -305,12 +305,16 @@ struct SpikeRow: View {
                 .font(.system(size: 10 * k, weight: .bold))
                 .foregroundStyle(LeagueTheme.red)
                 .alignmentGuide(.capCenter) { $0[VerticalAlignment.center] }
-            Text(alert.text)
-                .font(LeagueTheme.title(12 * k, .semibold))
-                .tracking(-0.2 * k)
-                .foregroundStyle(LeagueTheme.text)
-                .lineLimit(1)
-                .capCentered(size: 12 * k, weight: .semibold)
+            // one line when it fits; otherwise champion over the spike (split at the " · "), never cut mid-name.
+            ViewThatFits(in: .horizontal) {
+                line(alert.text).fixedSize(horizontal: true, vertical: false)
+                // the fallback may truncate: an unusually long item name still can't push the label off the card.
+                VStack(alignment: .leading, spacing: 2 * k) {
+                    line(head)
+                    line(tail)
+                }
+            }
+            .capCentered(size: 12 * k, weight: .semibold)
             Spacer(minLength: 10 * k)
             Text("Spike")
                 .leagueLabel(scale: k, color: LeagueTheme.red)
@@ -324,6 +328,18 @@ struct SpikeRow: View {
         }
         .leaguePanel(scale: k, accent: LeagueTheme.red)
         .accessibilityElement(children: .combine)
+    }
+
+    private var parts: [Substring] { alert.text.split(separator: " · ", maxSplits: 1) }
+    private var head: String { parts.count == 2 ? String(parts[0]) : alert.text }
+    private var tail: String { parts.count == 2 ? String(parts[1]) : "" }
+
+    private func line(_ text: String) -> some View {
+        Text(text)
+            .font(LeagueTheme.title(12 * k, .semibold))
+            .tracking(-0.2 * k)
+            .foregroundStyle(LeagueTheme.text)
+            .lineLimit(1)
     }
 }
 
