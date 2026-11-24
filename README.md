@@ -1,6 +1,8 @@
 # ganksense
 
-A small macOS menu bar app for League of Legends (Summoner's Rift). It shows useful information during the game and helps you understand your deaths after the game.
+A small macOS menu bar app for League of Legends. It helps from queue to post-game: it scouts the lobby, suggests runes and builds in champ select, shows a quiet overlay during the game and explains your deaths afterwards.
+
+Works in Summoner's Rift games (draft, ranked, blind, quickplay, Clash), the Practice Tool and ARAM. Other modes, such as Arena, are ignored.
 
 <table align="center">
 <tr>
@@ -11,13 +13,40 @@ A small macOS menu bar app for League of Legends (Summoner's Rift). It shows use
 
 ## What it does
 
-- **Counter-builds.** Shows the next item to buy. The advice changes when the enemy team builds new items.
-- **One goal per game.** Choose one goal before the game, for example "Deaths before 14:00". The app tracks it live.
-- **Death review.** After the game, each death gets a likely cause, for example jungler gank or teamfight. Treat it as a hint, not as a fact.
-- **Enemy spike alerts.** A short message when an enemy completes a major item or reaches level 6, 11 or 16.
-- **Tilt guard.** A calm reminder after a loss streak or a long session.
+**In the queue**
 
-The overlay is hidden by default. It appears when something important happens, while you are dead, or while you hold **Tab**.
+- **Queue clock** in the menu bar while you search for a game.
+- **Auto-accept** and a **match found notification**, both optional.
+
+**In champ select**
+
+- **Banner above the client** with the rune page (one click applies it), the core build and summoner spells for your pick.
+- **Lane matchup** against your likely opponent, ban ideas, your own record on the champion and into that opponent, and team composition warnings.
+
+**On the loading screen**
+
+- **Scout card** for both teams: rank and season win rate, plus flags such as likely smurf, one-trick, win or loss streak, new on the champion and duo. Ranks come from your local client. A player's champion pool loads from OP.GG only when you open their row.
+
+**During the game**
+
+The overlay is hidden by default. It appears when something important happens, while you are dead, or while you hold **Tab**. It can show:
+
+- **Next item to buy.** The advice changes when the enemy team builds new items.
+- **Enemy damage mix** (AD or AP) and **item gold lead** by lane.
+- **Spike alerts** when an enemy completes a major item or reaches level 6, 11 or 16.
+- **Enemy jungler line**: where the jungler last showed up, from the kill feed and objectives only (never positions).
+- **Your goal** with live progress.
+- **ARAM augments** in ARAM games.
+
+**After the game**
+
+- **Death review.** Each death gets a likely cause, for example a jungler gank or a teamfight. Treat it as a hint, not as a fact.
+- **Your last 10 games.** Patterns across recent games, in the menu bar window.
+
+**Always**
+
+- **One goal per game.** Pick one before the game: deaths before 14:00, CS at 10:00, CS per minute at 20:00, kill participation, deaths this game or gold at 15:00. You can set your own targets.
+- **Tilt guard.** A calm break reminder after a loss streak or after a long session.
 
 <table align="center">
 <tr>
@@ -25,6 +54,10 @@ The overlay is hidden by default. It appears when something important happens, w
 <td valign="top"><img src="docs/images/popover-client.png" alt="The menu bar window in the League client" width="300"></td>
 </tr>
 </table>
+
+Builds come from OP.GG when "Use OP.GG builds" is on (Settings > General). With it off, the app uses its own built-in builds and makes no OP.GG requests. Overlay position, size and the optional lines are in Settings > Overlay.
+
+<p align="center"><img src="docs/images/settings-goals.png" alt="Goal targets in Settings" width="440"></p>
 
 ## Requirements
 
@@ -55,10 +88,12 @@ curl -fsSL https://ganksense.app/uninstall.sh | bash -s -- --purge
 
 ## Privacy
 
-ganksense only uses Riot's official local APIs and public static data. It does not read game memory, does not control your keyboard or mouse, and has no accounts and no telemetry.
+ganksense only uses Riot's official local APIs and public static data. It does not read game memory, does not press keys or move the mouse, and has no accounts and no telemetry.
 
-- **Stored on your Mac only:** your settings and your game history. Other players' names are never stored. Folder: `~/Library/Application Support/ganksense`
-- **Network:** public item and champion data from Riot. If you turn it on, build suggestions from OP.GG (sends only the champion, role and game mode).
+- **Stored on your Mac only:** your settings and your game history (date, champion, role, result, goal result, and each death with its time and killer champion). Other players' names are never stored. Folder: `~/Library/Application Support/ganksense`
+- **Riot:** public item and champion data from `ddragon.leagueoflegends.com`.
+- **OP.GG** (only with "Use OP.GG builds" on): your champion, role and game mode for builds; the lane opponent for matchup tips; the ARAM augment list. When you open a player's row on the scout card, that player's Riot ID and region are sent once to load their champion pool. Nothing from OP.GG is cached under a player's name.
+- **League client:** the app reads your lobby, champ select and match history from the local client. It writes to the client only to accept a match (if auto-accept is on) and to save a rune page when you click apply.
 - **Your control:** Settings > General > Privacy has "Show in Finder" and "Delete all data".
 
 ## Permissions
@@ -67,8 +102,8 @@ ganksense asks macOS for two optional permissions. The app runs without them.
 
 | Permission | Why | If you refuse |
 |---|---|---|
-| **Input Monitoring** | To see if Tab is held, so the overlay shows while you hold it. Keys are never recorded. | Holding Tab does not show the overlay. |
-| **Screen Recording** | To find which screen the game is on. Only the window position is read, never the screen contents. | The overlay opens on your main screen. |
+| **Input Monitoring** | To check if Tab is held, so the overlay shows while you hold it. Only the Tab key's state is read; keys are never recorded. | Holding Tab does not show the overlay. |
+| **Screen Recording** | To find where the game and client windows are, so the overlay and champ select banner line up. Only window positions are read, never the screen contents. | The overlay and banner open on your main screen. |
 
 You can change both in System Settings > Privacy & Security.
 
