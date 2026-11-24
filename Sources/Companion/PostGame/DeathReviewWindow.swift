@@ -23,6 +23,7 @@ final class DeathReviewWindow: NSObject, NSWindowDelegate {
     private var mode = Mode.live
     private var shownID: String?
     private var closing = false
+    private var previewPatternLine: String?
 
     init(coordinator: Coordinator) {
         self.coordinator = coordinator
@@ -33,8 +34,9 @@ final class DeathReviewWindow: NSObject, NSWindowDelegate {
     }
 
     /// sample record (`--review-preview`).
-    func showPreview(_ record: GameRecord) {
+    func showPreview(_ record: GameRecord, patternLine: String? = nil) {
         mode = .preview
+        previewPatternLine = patternLine
         present(record, animated: false)
     }
 
@@ -75,7 +77,7 @@ final class DeathReviewWindow: NSObject, NSWindowDelegate {
     private func present(_ record: GameRecord, animated: Bool) {
         shownID = record.id
         let rows = DeathReviewView.rows(fitting: (targetScreen?.visibleFrame.height ?? 900) * 0.88)
-        let host = NSHostingController(rootView: DeathReviewView(record: record, maxRows: rows) { [weak self] in self?.userClosed() })
+        let host = NSHostingController(rootView: DeathReviewView(record: record, patternLine: mode == .preview ? previewPatternLine : coordinator.patterns?.reviewLine, maxRows: rows) { [weak self] in self?.userClosed() })
         // sized once from the content; letting the hosting view drive the size can loop layout.
         host.sizingOptions = []
         let fit = host.sizeThatFits(in: NSSize(width: DeathReviewView.width, height: 4000))

@@ -369,7 +369,11 @@ extension LiveGameSnapshot {
     public var isSummonersRift: Bool { gameData?.gameMode == "CLASSIC" && gameData?.mapNumber == 11 }
     /// the practice tool runs on summoner's rift; it gets the live features but is never recorded.
     public var isPracticeTool: Bool { gameData?.gameMode == "PRACTICETOOL" && gameData?.mapNumber == 11 }
-    public var hasLiveFeatures: Bool { isSummonersRift || isPracticeTool }
+    /// howling abyss (aram and its variants). detected by map, since a variant such as mayhem may report another game mode.
+    public var isHowlingAbyss: Bool { gameData?.mapNumber == 12 }
+    public var hasLiveFeatures: Bool { isSummonersRift || isPracticeTool || isHowlingAbyss }
+    /// only ranked-style summoner's rift games get a record, goal result and death review.
+    public var isRecordable: Bool { isSummonersRift }
 }
 
 /// case-insensitive. equal if the full strings are equal, or the game-name part (before `#`) is equal

@@ -18,6 +18,25 @@ actor ItemIconCache {
         let config = URLSessionConfiguration.ephemeral
         config.timeoutIntervalForRequest = 10
         session = URLSession(configuration: config)
+        let root = self.root
+        Task.detached(priority: .background) { Self.prune(root, keep: 2) }
+    }
+
+    /// every patch gets its own folder; keep the newest `keep` patch folders and drop the rest so the cache stops
+    /// growing by a patch's worth of icons every two weeks. folders not named like a patch are left alone.
+    nonisolated static func prune(_ root: URL, keep: Int) {
+        let fm = FileManager.default
+        guard let names = try? fm.contentsOfDirectory(atPath: root.path) else { return }
+        func parts(_ name: String) -> [Int]? {
+            let comps = name.split(separator: ".", omittingEmptySubsequences: false)
+            let nums = comps.compactMap { Int($0) }
+            return comps.count >= 2 && nums.count == comps.count ? nums : nil
+        }
+        let versions = names.compactMap { n in parts(n).map { (n, $0) } }
+            .sorted { $0.1.lexicographicallyPrecedes($1.1) }
+        for (name, _) in versions.dropLast(keep) {
+            try? fm.removeItem(at: root.appendingPathComponent(name, isDirectory: true))
+        }
     }
 
     func data(for url: URL) async -> Data? {

@@ -99,7 +99,7 @@ public struct ThreatProfile: Sendable, Equatable {
             if items.filter({ ($0.stats["FlatCritChanceMod"] ?? 0) > 0 }).count >= 2 { critCarries.append(name) }
             if ccChampions.contains(id) || (champ?.tags.first == "Tank") { ccNames.append(name) }
             let completed = items.filter { CounterBuildEngine.isFinished($0) && !$0.tags.contains("Boots") }.count
-            if champ?.tags.contains("Assassin") == true, (champ?.attack ?? 0) + (champ?.magic ?? 0) > 0,
+            if champ?.tags.contains("Assassin") == true, champ?.tags.first != "Marksman",
                enemy.scores.kills >= 3 || completed >= 2 {
                 let label = enemy.scores.kills >= 3 ? "\(name) \(enemy.scores.kills) kills" : "\(name) \(completed) items"
                 assassins.append((name, label))
@@ -143,8 +143,7 @@ public struct ThreatProfile: Sendable, Equatable {
     /// (ad share blended from champion kit and bought items, weight by how fed and itemized the enemy is).
     private static func damageBlend(champ: DDChampion?, items: [DDItem], kills: Int,
                                     classifier: ItemClassifier) -> (blend: Double, weight: Double) {
-        let atk = Double(champ?.attack ?? 5), mag = Double(champ?.magic ?? 5)
-        let champShare = atk + mag > 0 ? atk / (atk + mag) : 0.5
+        let champShare = champ?.physicalShare ?? 0.5
         var adGold = 0.0, apGold = 0.0, itemGold = 0.0
         for item in items {
             let d = classifier.damageProfile(item.id)

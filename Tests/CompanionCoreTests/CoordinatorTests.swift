@@ -1,4 +1,5 @@
 import Testing
+import Synchronization
 @testable import CompanionCore
 
 // no foundation import here: see coordinatortestsupport.swift.
@@ -216,25 +217,47 @@ private func realSleep(ms: Int) async {
         c.stop()
     }
 
-    @Test func otherModesRecordNothing() async throws {
-        var aram = try midgame(time: 900)
-        aram.gameData?.gameMode = "ARAM"
-        aram.gameData?.mapNumber = 12
+    @Test func arenaGetsNoSession() async throws {
+        var arena = try midgame(time: 900)
+        arena.gameData?.gameMode = "CHERRY"
+        arena.gameData?.mapNumber = 30
         let live = ControlledLive()
-        live.set(.snap(aram))
+        live.set(.snap(arena))
         let c = makeCoordinator(live: live)
         c.start()
         #expect(await eventually { c.itemCatalog != nil })
         c.leagueProcessChanged(clientRunning: false, gameRunning: true)
         #expect(await eventually { live.calls >= 5 })
-        #expect(c.snapshot == nil && c.goalProgress == nil && c.suggestion == nil)
+        #expect(c.snapshot == nil && c.suggestion == nil)
+        c.stop()
+    }
+
+    @Test func aramHasLiveAdviceButNoGoalJunglerOrRecord() async throws {
+        var aram = try midgame(time: 900)
+        // a variant may report another mode string: the map decides.
+        aram.gameData?.gameMode = "KIWI"
+        aram.gameData?.mapNumber = 12
+        let live = ControlledLive()
+        live.set(.snap(aram))
+        let c = makeCoordinator(live: live)
+        var reported: [String] = []
+        c.onHowlingAbyssGame = { reported.append($0) }
+        c.setGoal(Goal(preset: .totalDeaths, target: 3))
+        c.start()
+        #expect(await eventually { c.itemCatalog != nil })
+        c.leagueProcessChanged(clientRunning: false, gameRunning: true)
+        #expect(await eventually { c.snapshot != nil && c.suggestion != nil })
+        #expect(c.goalProgress == nil && c.jungler == nil)
+        #expect(reported == ["KIWI"])
         var ended = aram
         ended.events.append(GameEvent(id: 99, name: "GameEnd", time: 950, result: "Win"))
         live.set(.snap(ended))
-        #expect(await eventually { live.calls >= 10 })
+        let before = live.calls
+        #expect(await eventually { live.calls >= before + 5 })
         c.leagueProcessChanged(clientRunning: false, gameRunning: false)
         #expect(c.records.isEmpty)
         #expect(c.pendingReview == nil)
+        #expect(c.goalProgress == nil)
         c.stop()
     }
 
@@ -304,4 +327,33 @@ private func realSleep(ms: Int) async {
         #expect(partial?.tilt.enabled == false)
         #expect(partial?.showWhileHoldingTab == true)
     }
+}
+
+private final class FakeMatchmaking: ClientSource, MatchmakingSource, Sendable {
+    private let state = Mutex<(response: String?, accepts: Int)>(("None", 0))
+    var accepts: Int { state.withLock { $0.accepts } }
+    func phase() async throws -> GameflowPhase { .readyCheck }
+    func champSelect() async throws -> ChampSelectInfo? { nil }
+    func recentMatches(count: Int) async throws -> [MatchSummary] { [] }
+    func queueSearch() async -> QueueSearch? { state.withLock { QueueSearch(timeInQueue: 90, readyCheckResponse: $0.response) } }
+    func acceptReadyCheck() async -> Bool { state.withLock { $0.accepts += 1; $0.response = "Accepted" }; return true }
+}
+
+@MainActor @Test func autoAcceptsOncePerReadyCheckOnlyWhenOn() async {
+    let fake = FakeMatchmaking()
+    let c = makeCoordinator(live: ScriptedLive([], then: .notRunning))
+    var found: [Bool] = []
+    c.onMatchFound = { found.append($0) }
+    await c.handleMatchmaking(.readyCheck, client: fake)
+    #expect(fake.accepts == 0 && found == [false])  // off by default
+    await c.handleMatchmaking(.matchmaking, client: fake)
+    var s = c.settings
+    s.autoAccept = true
+    c.updateSettings(s)
+    await c.handleMatchmaking(.readyCheck, client: fake)
+    await c.handleMatchmaking(.readyCheck, client: fake)
+    #expect(fake.accepts == 1 && found == [false, true])
+    #expect(c.queueStartedAt != nil)
+    await c.handleMatchmaking(.champSelect, client: fake)
+    #expect(c.queueStartedAt == nil)
 }

@@ -13,6 +13,8 @@ final class AppModel {
     /// shows the overlay with demo data for a few seconds (settings › overlay). set by the overlay controller;
     /// nil until one exists, which disables the button.
     var showOverlayPreview: (() -> Void)?
+    /// the settings overlay preview closes at this time (nil: not running).
+    var overlayPreviewEndsAt: Date?
 
     /// opens the settings window (set by app delegate). the popover is hosted by appkit, outside any swiftui
     /// scene, so the open settings environment action is only the fallback (the popover preview).
@@ -20,6 +22,91 @@ final class AppModel {
 
     @ObservationIgnored var reopenReview: (() -> Void)?
     @ObservationIgnored var closeReview: (() -> Void)?
+
+    /// result of the last Apply click, tied to the page it wrote (a new champion's page shows no stale result).
+    struct RuneApplyStatus: Equatable {
+        enum State: Equatable { case applying, applied, noFreeSlot, failed }
+        var page: RunePage
+        var state: State
+    }
+    private(set) var runeApply: RuneApplyStatus?
+
+    /// the champ select banner with sample data (settings demo, or --popover-preview champselect).
+    var champSelectPreview = false
+
+    /// settings: shows the banner with sample data until it's closed or a real champ select starts.
+    func startBannerDemo() {
+        guard !champSelectPreview, coordinator.phase != .client(.champSelect) else { return }
+        runeApply = nil
+        bannerDismissed = false
+        bannerExpanded = false
+        preferMatchupRunes = true
+        personalRecordPreview = PopoverPreview.sampleRecord
+        coordinator.advisor.showPreview(advice: PopoverPreview.sampleAdvice, champion: "Ahri", role: .mid,
+                                        matchup: PopoverPreview.sampleMatchup, championID: "Ahri",
+                                        warnings: ["No frontline"])
+        champSelectPreview = true
+    }
+
+    func endBannerDemo() {
+        guard champSelectPreview else { return }
+        champSelectPreview = false
+        personalRecordPreview = nil
+        runeApply = nil
+        bannerDismissed = false
+        bannerExpanded = false
+        coordinator.advisor.endPreview()
+    }
+
+    var inChampSelect: Bool { champSelectPreview || coordinator.phase == .client(.champSelect) }
+
+    /// the page matched to my lane opponent, when op.gg has enough games on it and it differs from the standard one.
+    var matchupRunes: RunePage? {
+        let advisor = coordinator.advisor
+        guard let page = advisor.matchup?.runes, page.perkIDs != advisor.advice?.runes?.perkIDs else { return nil }
+        return page
+    }
+
+    /// false: the standard page even when a matchup page exists. back to the matchup page each champ select.
+    var preferMatchupRunes = true
+
+    /// the page the banner shows and Apply writes.
+    var shownRunes: RunePage? {
+        if preferMatchupRunes, let page = matchupRunes { return page }
+        return coordinator.advisor.advice?.runes
+    }
+
+    /// debug preview: fixed record instead of the stored games.
+    var personalRecordPreview: PersonalRecord?
+
+    /// my games on the champion I hold, and into the lane opponent.
+    var personalRecord: PersonalRecord? {
+        if let personalRecordPreview { return personalRecordPreview }
+        guard let id = coordinator.advisor.myChampionID else { return nil }
+        let record = PersonalRecord.compute(records: coordinator.records, championID: id,
+                                            opponent: coordinator.advisor.enemyName)
+        return record.champion.games > 0 ? record : nil
+    }
+
+    /// writes the shown rune page into our own "ganksense" page. only ever from the Apply button.
+    func applyRunes() {
+        if champSelectPreview, let page = shownRunes {
+            // demo: nothing is written to the client.
+            runeApply = RuneApplyStatus(page: page, state: .applied)
+            return
+        }
+        guard let page = shownRunes, let lcu, runeApply?.state != .applying else { return }
+        runeApply = RuneApplyStatus(page: page, state: .applying)
+        Task {
+            let outcome = await lcu.applyRunePage(page)
+            let state: RuneApplyStatus.State = switch outcome {
+            case .applied: .applied
+            case .noFreeSlot: .noFreeSlot
+            case .invalidPage, .failed: .failed
+            }
+            runeApply = RuneApplyStatus(page: page, state: state)
+        }
+    }
 
     var reviewHint: String? {
         coordinator.latestReviewableRecord.map(ReviewLifecycle.hint(for:))
@@ -91,6 +178,18 @@ final class AppModel {
         started = true
         let notifier = self.notifier
         coordinator.onTiltNudge = { message in notifier.notifyTilt(message) }
+        coordinator.onMatchFound = { [weak self] accepted in
+            guard let self, self.coordinator.settings.notifyMatchFound else { return }
+            AppLog.app.notice("Match found, \(accepted ? "accepted" : "not accepted", privacy: .public)")
+            // you're looking at the client already: it shows the check itself.
+            if let front = NSWorkspace.shared.frontmostApplication,
+               LeagueProcessWatcher.kind(bundleID: front.bundleIdentifier,
+                                         executable: front.executableURL?.lastPathComponent) == .client { return }
+            notifier.notifyMatchFound(accepted: accepted)
+        }
+        coordinator.onHowlingAbyssGame = { mode in
+            AppLog.app.notice("Howling Abyss game detected, game mode \(mode, privacy: .public)")
+        }
         coordinator.start()
         watcher.start { [weak self] client, game in
             guard let self else { return }
@@ -167,6 +266,36 @@ final class AppModel {
         guard let version = coordinator.itemCatalog?.version else { return nil }
         return dataDragon.itemIconURL(id: id, version: version)
     }
+
+    func championIconURL(key: Int) -> URL? {
+        guard let catalog = coordinator.championCatalog, let champ = catalog.champion(key: key) else { return nil }
+        return dataDragon.championIconURL(id: champ.id, version: catalog.version)
+    }
+
+    /// rune and spell art for the banner, loaded once per patch when the first champ select needs it.
+    private(set) var icons: IconCatalog?
+    @ObservationIgnored private var iconsTask: Task<Void, Never>?
+
+    func loadIcons() {
+        guard iconsTask == nil, icons == nil else { return }
+        let dragon = dataDragon
+        let known = coordinator.championCatalog?.version
+        iconsTask = Task {
+            let version: String? = if let known { known } else { try? await dragon.latestVersion() }
+            if let version { icons = try? await dragon.icons(version: version) }
+            iconsTask = nil
+        }
+    }
+
+    func championIconURL(id: String?) -> URL? {
+        guard let id, let version = coordinator.championCatalog?.version else { return nil }
+        return dataDragon.championIconURL(id: id, version: version)
+    }
+
+    /// the champ select banner was closed with its x; reset when the next champ select starts.
+    var bannerDismissed = false
+    /// the slim bar was opened into the full banner (reset each champ select).
+    var bannerExpanded = false
 }
 
 /// companion core.settings (swiftui also has a settings scene).

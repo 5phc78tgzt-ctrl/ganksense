@@ -1,7 +1,10 @@
 import Foundation
 
 public protocol BaseBuildSource: Sendable {
-    func baseBuild(championID: String, role: Role) async -> BaseBuild?
+    /// `aram` asks for howling abyss data instead of ranked (op.gg wants a position either way and ignores it there).
+    func baseBuild(championID: String, role: Role, aram: Bool) async -> BaseBuild?
+    /// the champion's best aram augments, best first; empty when unknown.
+    func augments(championKey: Int) async -> [AramAugment]
 }
 
 public actor OPGGClient: BaseBuildSource {
@@ -14,6 +17,8 @@ public actor OPGGClient: BaseBuildSource {
         "data.fifth_items[].{ids[]}",
     ]
     static let maxSituational = 6
+    static let maxAugments = 5
+    static let augmentFields = ["data.augments[].{id,name,performance,tier}"]
 
     private let session: URLSession
     private let cacheDir: URL
@@ -27,10 +32,16 @@ public actor OPGGClient: BaseBuildSource {
         self.timeout = timeout
     }
 
-    public func baseBuild(championID: String, role: Role) async -> BaseBuild? {
-        let file = cacheFile(championID: championID, role: role)
-        if let cached = Self.readCache(file) { return cached }
-        guard let text = await fetchText(champion: Self.opggName(championID), role: role),
+    public func baseBuild(championID: String, role: Role, aram: Bool = false) async -> BaseBuild? {
+        let file = cacheFile(championID: championID, name: aram ? "aram" : role.rawValue)
+        if let cached: BaseBuild = Self.readCache(file) { return cached }
+        let arguments: [String: Any] = [
+            "champion": Self.opggName(championID),
+            "position": aram ? Role.mid.rawValue : role.rawValue,
+            "game_mode": aram ? "aram" : "ranked",
+            "desired_output_fields": Self.desiredFields,
+        ]
+        guard let text = await fetchText(tool: "lol_get_champion_analysis", arguments: arguments),
               let parsed = try? OPGGParser.parse(text),
               let b = Self.build(from: parsed.root, headers: parsed.headers)
         else { return nil }
@@ -40,12 +51,25 @@ public actor OPGGClient: BaseBuildSource {
         return result
     }
 
-    private static func readCache(_ file: URL) -> BaseBuild? {
-        guard let data = try? Data(contentsOf: file) else { return nil }
-        return try? JSONDecoder().decode(BaseBuild.self, from: data)
+    public func augments(championKey: Int) async -> [AramAugment] {
+        guard championKey > 0 else { return [] }
+        let file = cacheFile(championID: "augments", name: String(championKey))
+        if let cached: [AramAugment] = Self.readCache(file) { return cached }
+        let arguments: [String: Any] = ["champion_id": championKey, "desired_output_fields": Self.augmentFields]
+        guard let text = await fetchText(tool: "lol_list_aram_augments", arguments: arguments),
+              let parsed = try? OPGGParser.parse(text)
+        else { return [] }
+        let list = Self.augments(from: parsed.root, headers: parsed.headers)
+        if !list.isEmpty { Self.writeCache(list, to: file) }
+        return list
     }
 
-    private static func writeCache(_ build: BaseBuild, to file: URL) {
+    static func readCache<T: Decodable>(_ file: URL) -> T? {
+        guard let data = try? Data(contentsOf: file) else { return nil }
+        return try? JSONDecoder().decode(T.self, from: data)
+    }
+
+    static func writeCache(_ build: some Encodable, to file: URL) {
         guard let data = try? JSONEncoder().encode(build) else { return }
         try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
         try? data.write(to: file, options: .atomic)
@@ -99,6 +123,39 @@ public actor OPGGClient: BaseBuildSource {
         return (starter, core, boots, Array(situational.prefix(maxSituational)))
     }
 
+    /// the augment list of a `lol_list_aram_augments` tree: rows without a name are dropped, then best tier first
+    /// (a lower tier number is better; op.gg lists them by pick rate, which tracks it), ties by win performance.
+    static func augments(from root: OPGGValue, headers: [String: [String]]) -> [AramAugment] {
+        guard case let .object(rootName, rootArgs) = root else { return [] }
+        let dataIndex = headers[rootName]?.firstIndex(of: "data") ?? 0
+        guard dataIndex < rootArgs.count,
+              case let .object(dataName, dataArgs) = rootArgs[dataIndex],
+              let listIndex = headers[dataName]?.firstIndex(of: "augments"), listIndex < dataArgs.count,
+              case let .array(rows) = dataArgs[listIndex]
+        else { return [] }
+
+        var out: [AramAugment] = []
+        for row in rows {
+            guard case let .object(name, args) = row, let fields = headers[name] else { continue }
+            func value(_ key: String) -> OPGGValue? {
+                guard let i = fields.firstIndex(of: key), i < args.count else { return nil }
+                return args[i]
+            }
+            guard case let .number(id)? = value("id"), id.isFinite, id > 0, id < 1e9,
+                  case let .string(label)? = value("name"),
+                  case let .number(tier)? = value("tier"), tier.isFinite, tier >= 0, tier < 100
+            else { continue }
+            let text = label.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty else { continue }
+            var performance = 0.0
+            if case let .number(p)? = value("performance"), p.isFinite { performance = p }
+            out.append(AramAugment(id: Int(id), name: text, tier: Int(tier), performance: performance))
+        }
+        // op.gg doesn't document what the tier number means, so rank by its performance score only.
+        out.sort { (-$0.performance, $0.id) < (-$1.performance, $1.id) }
+        return Array(out.prefix(maxAugments))
+    }
+
     /// ids of a single-option field; if it arrives as a list of options, uses the first.
     private static func primaryIDs(_ value: OPGGValue, headers: [String: [String]]) -> [Int] {
         if case let .array(items) = value, let first = items.first, case .object = first {
@@ -141,17 +198,17 @@ public actor OPGGClient: BaseBuildSource {
         return out
     }
 
-    private func cacheFile(championID: String, role: Role) -> URL {
+    func cacheFile(championID: String, name: String) -> URL {
         func safe(_ s: String) -> String {
             String(s.filter { $0.isLetter || $0.isNumber || $0 == "." || $0 == "_" || $0 == "-" })
         }
         return cacheDir
             .appendingPathComponent(safe(patch).isEmpty ? "unknown" : safe(patch), isDirectory: true)
-            .appendingPathComponent("\(safe(championID))_\(role.rawValue).json")
+            .appendingPathComponent("\(safe(championID))_\(safe(name)).json")
     }
 
-    private func fetchText(champion: String, role: Role) async -> String? {
-        guard let request = makeRequest(champion: champion, role: role) else { return nil }
+    func fetchText(tool: String, arguments: [String: Any]) async -> String? {
+        guard let request = makeRequest(tool: tool, arguments: arguments) else { return nil }
         let session = self.session
         let timeout = self.timeout
         let result: (Data, URLResponse)? = try? await withThrowingTaskGroup(of: (Data, URLResponse)?.self) { group in
@@ -169,19 +226,14 @@ public actor OPGGClient: BaseBuildSource {
         return Self.extractText(data)
     }
 
-    private func makeRequest(champion: String, role: Role) -> URLRequest? {
+    private func makeRequest(tool: String, arguments: [String: Any]) -> URLRequest? {
         let body: [String: Any] = [
             "jsonrpc": "2.0",
             "id": 1,
             "method": "tools/call",
             "params": [
-                "name": "lol_get_champion_analysis",
-                "arguments": [
-                    "champion": champion,
-                    "position": role.rawValue,
-                    "game_mode": "ranked",
-                    "desired_output_fields": Self.desiredFields,
-                ] as [String: Any],
+                "name": tool,
+                "arguments": arguments,
             ] as [String: Any],
         ]
         guard let httpBody = try? JSONSerialization.data(withJSONObject: body) else { return nil }

@@ -7,6 +7,7 @@ import CompanionCore
 /// appearance; the league language comes from `leaguetheme` (navy panel, gold hairline, parchment text).
 struct DeathReviewView: View {
     let record: GameRecord
+    var patternLine: String?
     var maxRows = DeathReviewView.scrollThreshold
     let onDone: () -> Void
 
@@ -105,7 +106,7 @@ struct DeathReviewView: View {
             Text("Goal").leagueLabel()
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 if let goal = record.goalResult {
-                    Text(goal.goal.preset.title)
+                    Text(goal.goal.title)
                         .font(LeagueTheme.body(14, .medium))
                         .foregroundStyle(LeagueTheme.text)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -184,7 +185,13 @@ struct DeathReviewView: View {
 
 
     private var footer: some View {
-        HStack {
+        HStack(alignment: .firstTextBaseline) {
+            if let patternLine {
+                Text(patternLine)
+                    .font(LeagueTheme.body(11))
+                    .foregroundStyle(LeagueTheme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             Spacer(minLength: 0)
             Button(action: onDone) { Text("Done") }
                 .buttonStyle(LeagueButtonStyle())

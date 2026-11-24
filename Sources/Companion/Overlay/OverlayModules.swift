@@ -6,14 +6,15 @@ struct GoalBadge: View {
     let progress: GoalProgress
 
     /// compact titles so the live value never has to be truncated at 260 pt.
-    static func shortTitle(_ p: GoalPreset) -> String {
-        switch p {
-        case .deathsBefore14: "Deaths < 14:00"
-        case .csAt10: "CS @ 10:00"
-        case .csPerMinAt20: "By 20:00"
+    static func shortTitle(_ g: Goal) -> String {
+        let clock = "\(g.minutes ?? 0):00"
+        return switch g.preset {
+        case .deathsBefore14: "Deaths < \(clock)"
+        case .csAt10: "CS @ \(clock)"
+        case .csPerMinAt20: "By \(clock)"
+        case .goldAt15: "Gold @ \(clock)"
         case .killParticipation: "Kill part."
         case .totalDeaths: "Deaths"
-        case .goldAt15: "Gold @ 15:00"
         }
     }
     @Environment(\.hudScale) private var k
@@ -25,10 +26,9 @@ struct GoalBadge: View {
                 .fill(color)
                 .frame(width: 7 * k, height: 7 * k)
                 .alignmentGuide(.capCenter) { d in d[VerticalAlignment.center] }
-            Text(Self.shortTitle(progress.goal.preset))
+            Text(Self.shortTitle(progress.goal))
                 .leagueLabel(scale: k, color: LeagueTheme.muted)
                 .lineLimit(1)
-                .minimumScaleFactor(0.7)
                 .capCentered(size: 10 * k, weight: .semibold)
             Spacer(minLength: 10 * k)
             HStack(alignment: .capCenter, spacing: 8 * k) {
@@ -104,7 +104,6 @@ struct NextBuyCard: View {
                         .tracking(-0.2 * k)
                         .foregroundStyle(LeagueTheme.text)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.75)
                     HStack(alignment: .capCenter, spacing: 5 * k) {
                         GoldCoin().frame(width: 8 * k, height: 8 * k)
                             .alignmentGuide(.capCenter) { $0[VerticalAlignment.center] }
@@ -155,7 +154,6 @@ struct NextBuyCard: View {
                         .font(LeagueTheme.body(11.5 * k, .medium))
                         .foregroundStyle(LeagueTheme.text.opacity(0.85))
                         .lineLimit(1)
-                        .minimumScaleFactor(0.8)
                         .capCentered(size: 11.5 * k, weight: .medium)
                     Spacer(minLength: 0)
                 }
@@ -165,6 +163,42 @@ struct NextBuyCard: View {
         .leaguePanel(scale: k)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Next buy: \(suggestion.next.name)")
+    }
+}
+
+/// howling abyss: the champion's best augments (op.gg), ranked; the tier is a small label on the right.
+struct AugmentsCard: View {
+    let augments: [AramAugment]
+    @Environment(\.hudScale) private var k
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7 * k) {
+            Text("Augments").leagueLabel(scale: k, color: LeagueTheme.gold)
+                .capCentered(size: 10 * k, weight: .semibold)
+            LeagueRule().opacity(0.7)
+            VStack(alignment: .leading, spacing: 6 * k) {
+                ForEach(Array(augments.enumerated()), id: \.element.id) { index, augment in
+                    HStack(alignment: .capCenter, spacing: 8 * k) {
+                        Text("\(index + 1)")
+                            .font(LeagueTheme.body(11 * k, .semibold))
+                            .monospacedDigit()
+                            .foregroundStyle(LeagueTheme.gold)
+                            .frame(width: 10 * k, alignment: .leading)
+                            .capCentered(size: 11 * k, weight: .semibold)
+                        Text(augment.name)
+                            .font(LeagueTheme.body(12 * k, .medium))
+                            .foregroundStyle(LeagueTheme.text)
+                            .lineLimit(1)
+                            .capCentered(size: 12 * k, weight: .medium)
+                        Spacer(minLength: 0)
+                    }
+                }
+            }
+        }
+        .padding(10 * k)
+        .leaguePanel(scale: k)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Best augments: " + augments.map(\.name).joined(separator: ", "))
     }
 }
 
@@ -276,7 +310,6 @@ struct SpikeRow: View {
                 .tracking(-0.2 * k)
                 .foregroundStyle(LeagueTheme.text)
                 .lineLimit(1)
-                .minimumScaleFactor(0.75)
                 .capCentered(size: 12 * k, weight: .semibold)
             Spacer(minLength: 10 * k)
             Text("Spike")
@@ -310,7 +343,6 @@ struct JunglerRow: View {
                 .font(LeagueTheme.body(10.5 * k, .medium))
                 .foregroundStyle(LeagueTheme.muted)
                 .lineLimit(1)
-                .minimumScaleFactor(0.75)
                 .capCentered(size: 10.5 * k, weight: .medium)
             Spacer(minLength: 10 * k)
             // same small tracked caps as "close" / "spike", so the stack reads as one system.
@@ -337,5 +369,86 @@ struct Diamond: Shape {
         p.addLine(to: CGPoint(x: rect.minX, y: rect.midY))
         p.closeSubpath()
         return p
+    }
+}
+
+
+/// item gold lead while tab is held: team, my lane and the per-role diffs. an estimate from items owned.
+struct GoldLeadCard: View {
+    let lead: GoldLead
+    @Environment(\.hudScale) private var k
+
+    /// "+1.2k" above 999, "+850" below, "Even" within 100 gold.
+    static func text(_ diff: Int) -> String {
+        if abs(diff) < 100 { return "Even" }
+        let sign = diff > 0 ? "+" : "-"
+        let n = abs(diff)
+        return n < 1000 ? "\(sign)\(n)" : "\(sign)\(String(format: "%.1f", Double(n) / 1000))k"
+    }
+
+    static func color(_ diff: Int) -> Color {
+        abs(diff) < 100 ? LeagueTheme.muted : diff > 0 ? LeagueTheme.teal : LeagueTheme.red
+    }
+
+    private static func short(_ role: Role) -> String {
+        switch role {
+        case .top: "TOP"
+        case .jungle: "JNG"
+        case .mid: "MID"
+        case .adc: "BOT"
+        case .support: "SUP"
+        }
+    }
+
+    var body: some View {
+        // title + team lead, then a compact column per role (my role's label is gold, which is the lane lead).
+        VStack(alignment: .leading, spacing: 6 * k) {
+            row("Item gold", "Team", lead.team)
+            if lead.roles.count > 1 {
+                HStack(spacing: 0) {
+                    ForEach(lead.roles, id: \.role) { r in
+                        VStack(spacing: 2 * k) {
+                            Text(Self.short(r.role))
+                                .leagueLabel(scale: k, color: r.isMe ? LeagueTheme.gold : LeagueTheme.muted)
+                                .capCentered(size: 10 * k, weight: .semibold)
+                            Text(Self.text(r.diff))
+                                .font(LeagueTheme.body(11 * k, .semibold))
+                                .monospacedDigit()
+                                .foregroundStyle(Self.color(r.diff))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.75)
+                                .capCentered(size: 11 * k, weight: .semibold)
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 10 * k)
+        .padding(.vertical, 8 * k)
+        .leaguePanel(scale: k)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Item gold, team \(Self.text(lead.team))" + (lead.lane.map { ", lane \(Self.text($0))" } ?? ""))
+    }
+
+    private func row(_ title: String?, _ label: String, _ diff: Int) -> some View {
+        HStack(alignment: .capCenter) {
+            if let title {
+                Text(title).leagueLabel(scale: k, color: LeagueTheme.gold)
+                    .capCentered(size: 10 * k, weight: .semibold)
+            }
+            Spacer(minLength: 4 * k)
+            Text(label).leagueLabel(scale: k)
+                .capCentered(size: 10 * k, weight: .semibold)
+            Text(Self.text(diff))
+                .font(LeagueTheme.title(12 * k))
+                .tracking(-0.2 * k)
+                .monospacedDigit()
+                .foregroundStyle(Self.color(diff))
+                .lineLimit(1)
+                .fixedSize()
+                .contentTransition(.numericText())
+                .capCentered(size: 12 * k, weight: .semibold)
+        }
     }
 }

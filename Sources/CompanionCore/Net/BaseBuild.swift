@@ -26,3 +26,18 @@ public struct BaseBuild: Codable, Sendable, Equatable {
         self.patch = patch
     }
 }
+
+/// one augment from op.gg's aram data (`tier`: lower is better).
+public struct AramAugment: Codable, Sendable, Equatable {
+    public var id: Int
+    public var name: String
+    public var tier: Int
+    public var performance: Double
+
+    public init(id: Int, name: String, tier: Int, performance: Double) {
+        self.id = id
+        self.name = name
+        self.tier = tier
+        self.performance = performance
+    }
+}

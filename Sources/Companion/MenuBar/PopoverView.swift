@@ -16,7 +16,6 @@ struct PopoverView: View {
                 header
                 section
                     .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.97, anchor: .top)))
-                footer
             }
         }
         .padding(12)
@@ -33,8 +32,28 @@ struct PopoverView: View {
                 .font(.headline)
                 .capCentered(style: .headline)
             Spacer(minLength: 8)
-            StatusPill(text: Self.statusText(coordinator.phase, demo: model.isDemo),
+            StatusPill(text: Self.statusText(model.inChampSelect ? .client(.champSelect) : coordinator.phase, demo: model.isDemo),
                        live: coordinator.phase == .inGame)
+            Button(action: showSettings) {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Palette.secondaryText)
+                    .frame(width: 22, height: 22)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Settings")
+            .accessibilityLabel("Settings")
+        }
+        // ⌘, and ⌘q while the popover is open.
+        .background {
+            Group {
+                Button("", action: showSettings).keyboardShortcut(",", modifiers: .command)
+                Button("") { NSApp.terminate(nil) }.keyboardShortcut("q", modifiers: .command)
+            }
+            .opacity(0)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
         }
         .popoverRow()
         .padding(.horizontal, 4)
@@ -48,24 +67,6 @@ struct PopoverView: View {
             ClientSection(model: model).id("client")
         case .inGame:
             InGameSection(model: model).id("inGame")
-        }
-    }
-
-    private var footer: some View {
-        HStack(spacing: 8) {
-            footerButton("Settings", action: showSettings).keyboardShortcut(",", modifiers: .command)
-            footerButton("Quit") { NSApp.terminate(nil) }.keyboardShortcut("q", modifiers: .command)
-        }
-        .buttonStyle(.glass)
-        .controlSize(.regular)
-        .font(.callout.weight(.medium))
-        .foregroundStyle(.primary)
-    }
-
-    private func footerButton(_ title: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .frame(maxWidth: .infinity)
         }
     }
 
@@ -97,3 +98,4 @@ struct PopoverView: View {
         return demo ? "Demo · \(base)" : base
     }
 }
+

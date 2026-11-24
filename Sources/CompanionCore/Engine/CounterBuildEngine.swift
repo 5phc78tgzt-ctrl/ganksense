@@ -14,6 +14,8 @@ public struct CounterBuildEngine: Sendable {
     static let finishedCostThreshold = 2200
     static let bootsMinGameTime = 300.0
     static let bootsBasePriority = 0.95
+    /// score added per fraction of an item already owned as components (a half-built item gets +0.25).
+    static let startedBonus = 0.5
 
     static let uniqueCategories: Set<CounterCategory> = [.antiHeal, .lifeline]
 
@@ -24,7 +26,8 @@ public struct CounterBuildEngine: Sendable {
         "spellblade": ["Trinity Force", "Lich Bane", "Iceborn Gauntlet", "Essence Reaver"],
         "annul": ["Banshee's Veil", "Edge of Night"],
         "blight": ["Void Staff", "Cryptbloom"],
-        "manaflow": ["Manamune", "Archangel's Staff", "Winter's Approach"],
+        // the transformed forms too, so a muramana never gets its manamune suggested again.
+        "manaflow": ["Manamune", "Archangel's Staff", "Winter's Approach", "Muramana", "Seraph's Embrace", "Fimbulwinter"],
         "quicksilver": ["Mercurial Scimitar", "Quicksilver Sash"],
         "immolate": ["Sunfire Aegis", "Hollow Radiance"],
     ]
@@ -85,6 +88,9 @@ public struct CounterBuildEngine: Sendable {
 
     public func suggest(snapshot: LiveGameSnapshot, base: BaseBuild?, previous: BuildSuggestion?) -> BuildSuggestion? {
         guard let ctx = context(snapshot: snapshot, base: base) else { return nil }
+        // the loading screen already serves players with a game clock at 0: nothing to buy yet.
+        guard ctx.gameTime > 0 else { return nil }
+        if let starter = starterSuggestion(ctx) { return starter }
         let list = ranked(ctx)
         guard let top = list.first else { return nil }
 
@@ -97,14 +103,50 @@ public struct CounterBuildEngine: Sendable {
 
         let then = list.first { $0.item.id != chosen.item.id && !conflicts($0, chosen) }
         let cost = chosen.item.goldTotal
+        let credit = ownedCredit(for: chosen.item, owned: ctx.owned)
+        let remaining = max(0, cost - credit)
         let reasons = chips(for: chosen, profile: ctx.profile)
         return BuildSuggestion(
             next: ItemRef(chosen.item),
             reasons: reasons,
             then: then.map { ItemRef($0.item) },
-            costRemaining: max(0, cost - Int(ctx.gold)),
-            goldProgress: cost > 0 ? min(1, max(0, ctx.gold) / Double(cost)) : 1,
+            costRemaining: max(0, remaining - Int(ctx.gold)),
+            goldProgress: cost > 0 ? min(1, max(0, Double(credit) + max(0, ctx.gold)) / Double(cost)) : 1,
             isCounter: !reasons.isEmpty)
+    }
+
+    /// gold value of owned items that are already part of `item`'s recipe (each owned copy counts once; an owned
+    /// component covers its whole sub-tree), so buying a component lowers what is left to pay.
+    func ownedCredit(for item: DDItem, owned: [DDItem]) -> Int {
+        var pool = owned.map(\.id)
+        func walk(_ parts: [Int]) -> Int {
+            var total = 0
+            for id in parts {
+                if let i = pool.firstIndex(of: id) {
+                    pool.remove(at: i)
+                    total += catalog.item(id)?.goldTotal ?? 0
+                } else if let part = catalog.item(id) {
+                    total += walk(part.from)
+                }
+            }
+            return total
+        }
+        return walk(item.from)
+    }
+
+    /// right after the game starts, before anything is bought: the base build's starting item.
+    private func starterSuggestion(_ ctx: Context) -> BuildSuggestion? {
+        guard ctx.gameTime < 150,
+              !ctx.owned.contains(where: { !$0.tags.contains("Trinket") && !$0.tags.contains("Consumable") })
+                || ctx.owned.isEmpty,
+              let id = ctx.base.starter.first, let item = catalog.item(id), shopIDs.contains(id) else { return nil }
+        let then = ctx.base.starter.dropFirst().compactMap { catalog.item($0) }.first
+            ?? ctx.base.core.compactMap { catalog.item($0) }.first
+        return BuildSuggestion(
+            next: ItemRef(item), reasons: ["starting item"], then: then.map { ItemRef($0) },
+            costRemaining: max(0, item.goldTotal - Int(ctx.gold)),
+            goldProgress: item.goldTotal > 0 ? min(1, max(0, ctx.gold) / Double(item.goldTotal)) : 1,
+            isCounter: false)
     }
 
     func context(snapshot: LiveGameSnapshot, base: BaseBuild?) -> Context? {
@@ -114,8 +156,8 @@ public struct CounterBuildEngine: Sendable {
             ?? DDChampion(id: me.championID, key: 0, name: me.championName)
         let role = me.position.flatMap { Role(livePosition: $0) } ?? .mid
         let build = resolvedBase(base, champion: champ, role: role)
-        let archetype = ChampionArchetype(champion: champ)
-        let damage = damageType(of: build, champion: champ, archetype: archetype)
+        let damage = damageType(of: build, champion: champ, archetype: ChampionArchetype(champion: champ))
+        let archetype = Self.archetype(ChampionArchetype(champion: champ), following: damage, champion: champ)
 
         let enemies = snapshot.enemies
         let profile = ThreatProfile.analyze(enemies: enemies, catalog: catalog, champions: champions,
@@ -124,6 +166,18 @@ public struct CounterBuildEngine: Sendable {
                        owned: me.items.compactMap { catalog.item($0.itemID) }, profile: profile,
                        need: needs(profile, damage: damage, archetype: archetype),
                        gold: snapshot.activePlayer?.currentGold ?? 0, gameTime: gameTime, enemies: enemies)
+    }
+
+    /// the class the item filter uses follows the build's damage: an ap teemo or gwen is a mage, an ad mage pick a
+    /// fighter. tanks and enchanters keep their class.
+    static func archetype(_ a: ChampionArchetype, following damage: DamageType, champion: DDChampion) -> ChampionArchetype {
+        switch (a, damage) {
+        case (.marksman, .magic), (.assassinAD, .magic), (.fighter, .magic): return .mage
+        case (.mage, .physical):
+            if champion.tags.contains("Marksman") { return .marksman }
+            return champion.tags.contains("Assassin") ? .assassinAD : .fighter
+        default: return a
+        }
     }
 
     /// the given base is used only while it still resolves to legal core items (op.gg drift / unknown ids).
@@ -142,7 +196,7 @@ public struct CounterBuildEngine: Sendable {
             switch archetype {
             case .tank: return .none
             case .mage, .enchanter: return .magic
-            default: return champion.magic > champion.attack ? .magic : .physical
+            default: return champion.dealsMostlyMagic ? .magic : .physical
             }
         }
         return ad >= ap ? .physical : .magic
@@ -236,7 +290,9 @@ public struct CounterBuildEngine: Sendable {
         }
         answered.sort { $0.value != $1.value ? $0.value > $1.value : $0.category.rawValue < $1.category.rawValue }
         guard fromBase || !answered.isEmpty else { return nil }
-        let score = basePriority + answered.reduce(0) { $0 + $1.value } - penalty
+        // an item whose components are already in the inventory is half bought: finishing it comes first.
+        let started = item.goldTotal > 0 ? Double(ownedCredit(for: item, owned: ctx.owned)) / Double(item.goldTotal) : 0
+        let score = basePriority + answered.reduce(0) { $0 + $1.value } - penalty + Self.startedBonus * started
         return Candidate(item: item, score: score, basePriority: basePriority, answered: answered, isBoots: false)
     }
 

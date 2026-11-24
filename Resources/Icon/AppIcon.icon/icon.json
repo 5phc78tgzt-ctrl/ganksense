@@ -1,15 +1,7 @@
 {
   "fill" : {
-    "solid" : "srgb:0.11765,0.12549,0.14902,1.00000"
+    "solid" : "srgb:0.02745,0.03529,0.05882,1.00000"
   },
-  "fill-specializations" : [
-    {
-      "appearance" : "dark",
-      "value" : {
-        "solid" : "srgb:0.07843,0.08235,0.09804,1.00000"
-      }
-    }
-  ],
   "groups" : [
     {
       "layers" : [
@@ -21,13 +13,26 @@
       ],
       "shadow" : {
         "kind" : "neutral",
-        "opacity" : 0.5
+        "opacity" : 0.6
       },
       "specular" : true,
       "translucency" : {
         "enabled" : true,
-        "value" : 0.4
+        "value" : 0.35
       }
+    },
+    {
+      "layers" : [
+        {
+          "image-name" : "glow.svg",
+          "name" : "glow"
+        }
+      ],
+      "shadow" : {
+        "kind" : "none",
+        "opacity" : 0.5
+      },
+      "specular" : false
     }
   ],
   "supported-platforms" : {

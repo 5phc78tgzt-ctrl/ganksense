@@ -59,11 +59,16 @@ public struct SpikeDetector: Sendable {
         return alerts
     }
 
+    /// items that turn into another one once stacked: the upgrade is the same item, not a new spike.
+    static let transforms = ["Muramana": "Manamune", "Seraph's Embrace": "Archangel's Staff",
+                             "Fimbulwinter": "Winter's Approach"]
+
     private static func completedCounts(_ p: Player, _ catalog: ItemCatalog) -> [Int: Int] {
         var out: [Int: Int] = [:]
         for it in p.items {
             guard let d = catalog.item(it.itemID), d.isCompleted, !d.tags.contains("Boots") else { continue }
-            out[it.itemID, default: 0] += max(1, it.count)
+            let id = transforms[d.name].flatMap { catalog.item(named: $0)?.id } ?? it.itemID
+            out[id, default: 0] += max(1, it.count)
         }
         return out
     }

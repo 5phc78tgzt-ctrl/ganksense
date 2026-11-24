@@ -9,37 +9,44 @@ struct ClientSection: View {
     var body: some View {
         VStack(spacing: 10) {
             if let tilt = coordinator.tilt, tilt.reason != nil, let message = tilt.message {
-                TiltCard(message: message)
+                TiltRow(message: message)
                     .transition(.opacity)
+            }
+
+            if model.inChampSelect, model.bannerDismissed {
+                GlassSection { ChampSelectRow(model: model) }
             }
 
             GlassSection {
                 GoalPicker(model: model)
             }
 
-            if model.reviewHint != nil {
-                GlassSection { ReviewLastGameRow(model: model) }
-            }
+            GlassSection { recent }
 
-            GlassSection { statsRows }
+            if let patterns = coordinator.patterns {
+                GlassSection { PatternsCard(patterns: patterns, currentGoal: coordinator.settings.goal?.preset) }
+            }
         }
     }
 
-    private var statsRows: some View {
-        VStack(spacing: 8) {
+    /// today's record, the goal streak and the last game's review in one card.
+    private var recent: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            CardTitle("Recent").popoverRow()
             if let result = coordinator.phase == .postGame ? coordinator.goalProgress : nil {
                 StatRow(title: "Last game goal", value: Palette.title(for: result.state))
             }
             StatRow(title: "Today", value: todayText)
-            if coordinator.goalStreak > 0 {
-                StatRow(title: "Goal streak", value: "\(coordinator.goalStreak)")
-            }
-            if let line = deathInsight {
+            StatRow(title: "Goal streak", value: Format.streak(coordinator.goalStreak))
+            if coordinator.patterns == nil, let line = deathInsight {
                 Text(line)
                     .font(.caption)
                     .foregroundStyle(Palette.secondaryText)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.top, 2)
+            }
+            if model.reviewHint != nil {
+                Divider().padding(.vertical, 2)
+                ReviewLastGameRow(model: model)
             }
         }
     }
@@ -59,25 +66,26 @@ struct ClientSection: View {
         guard total >= Self.minDeathsForInsight, let top = known.max(by: { ($0.value, $1.key.rawValue) < ($1.value, $0.key.rawValue) })
         else { return nil }
         let pct = Int((Double(top.value) / Double(total) * 100).rounded())
-        return "\(pct) % of recent deaths: likely \(top.key.phrase)"
+        return "\(pct)% of recent deaths: likely \(top.key.phrase)"
     }
 }
 
-struct TiltCard: View {
+/// tilt guard's nudge: one slim amber row above the cards, not a card of its own.
+struct TiltRow: View {
     let message: String
 
     var body: some View {
-        GlassSection(tint: Palette.amber) {
-            HStack(alignment: .capCenter, spacing: 8) {
-                Image(systemName: "cup.and.saucer.fill")
-                    .foregroundStyle(Palette.amber)
-                    .alignmentGuide(.capCenter) { $0[VerticalAlignment.center] }
-                Text(message)
-                    .font(.callout)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .capCentered(style: .callout)
-            }
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: "cup.and.saucer.fill")
+                .font(.callout)
+                .foregroundStyle(Palette.amber)
+            Text(message)
+                .font(.callout)
+                .fixedSize(horizontal: false, vertical: true)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 2)
         .accessibilityElement(children: .combine)
     }
 }
@@ -94,9 +102,7 @@ struct GoalPicker: View {
     var body: some View {
         let goal = coordinator.settings.effectiveGoal()
         VStack(alignment: .leading, spacing: 6) {
-            Text("Goal for next game")
-                .font(.callout.weight(.semibold))
-                .lineLimit(1)
+            CardTitle("Goal for next game")
                 .popoverRow()
             HStack(alignment: .center, spacing: 8) {
                 Text("Focus")
@@ -106,7 +112,7 @@ struct GoalPicker: View {
                     Text("No goal").tag(GoalPreset?.none)
                     Divider()
                     ForEach(GoalPreset.allCases, id: \.self) { preset in
-                        Text(preset.title).tag(GoalPreset?.some(preset))
+                        Text(coordinator.settings.title(for: preset)).tag(GoalPreset?.some(preset))
                     }
                 }
                 .pickerStyle(.menu)
@@ -131,6 +137,21 @@ struct GoalPicker: View {
                 .font(.callout)
                 .popoverRow()
                 .transition(.opacity)
+                if let minutes = goal.minutes {
+                    HStack(alignment: .center, spacing: 8) {
+                        Text(goal.preset == .deathsBefore14 ? "Counted until" : "Checked at")
+                            .foregroundStyle(Palette.secondaryText)
+                        Spacer(minLength: 8)
+                        Text("\(minutes):00")
+                            .monospacedDigit()
+                            .contentTransition(.numericText(value: Double(minutes)))
+                        Stepper("Minute", value: minutesBinding(goal), in: Self.minutesRange, step: 1)
+                            .labelsHidden()
+                    }
+                    .font(.callout)
+                    .popoverRow()
+                    .transition(.opacity)
+                }
             } else {
                 Text("Pick one thing to focus on.")
                     .font(.callout)
@@ -141,13 +162,16 @@ struct GoalPicker: View {
         }
         .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: goal?.preset)
         .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: goal?.target)
+        .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: goal?.minutes)
     }
 
     private var presetBinding: Binding<GoalPreset?> {
         Binding(
             get: { coordinator.settings.goal?.preset },
             set: { preset in
-                coordinator.setGoal(preset.map { Goal(preset: $0, target: coordinator.settings.target(for: $0)) })
+                coordinator.setGoal(preset.map {
+                    Goal(preset: $0, target: coordinator.settings.target(for: $0), minutes: coordinator.settings.minutes(for: $0))
+                })
             }
         )
     }
@@ -163,6 +187,19 @@ struct GoalPicker: View {
             }
         )
     }
+
+    private func minutesBinding(_ goal: Goal) -> Binding<Double> {
+        Binding(
+            get: { Double(goal.minutes ?? 0) },
+            set: { value in
+                var s = coordinator.settings
+                s.setMinutes(Int(value.rounded()), for: goal.preset)
+                coordinator.updateSettings(s)
+            }
+        )
+    }
+
+    static let minutesRange: ClosedRange<Double> = Double(GoalPreset.minutesRange.lowerBound)...Double(GoalPreset.minutesRange.upperBound)
 
     static func step(_ preset: GoalPreset) -> Double {
         switch preset {
@@ -190,5 +227,75 @@ enum GoalTargetText {
     static func text(_ value: Double, _ preset: GoalPreset) -> String {
         if preset.lowerIsBetter { return Int(value.rounded()) == 1 ? "1 death" : "\(Int(value.rounded())) deaths" }
         return Format.target(value, preset)
+    }
+}
+
+/// "your last 10 games": collapsed to the most common likely cause, expanded to the early-death, killer and goal
+/// figures plus one suggestion. causes are estimates, so the wording stays soft.
+struct PatternsCard: View {
+    let patterns: GamePatterns
+    let currentGoal: GoalPreset?
+
+    @AppStorage("patternsCardExpanded") private var expanded = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button {
+                withAnimation(reduceMotion ? nil : .snappy(duration: 0.18)) { expanded.toggle() }
+            } label: {
+                HStack(alignment: .center, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Your last \(patterns.games) games")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(Palette.secondaryText)
+                        if !expanded {
+                            Text(patterns.causeLine ?? patterns.earlyLine)
+                                .font(.callout)
+                                .lineLimit(1)
+                        }
+                    }
+                    Spacer(minLength: 8)
+                    Image(systemName: "chevron.down")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Palette.secondaryText)
+                        .rotationEffect(.degrees(expanded ? 0 : -90))
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Your last \(patterns.games) games")
+            .accessibilityValue(expanded ? "expanded" : "collapsed")
+            .accessibilityHint("Shows or hides the patterns")
+
+            if expanded {
+                VStack(alignment: .leading, spacing: 6) {
+                    if let line = patterns.causeLine { Text(line) }
+                    Text(patterns.earlyLine).monospacedDigit()
+                    if let line = patterns.trendLine { Text(line).monospacedDigit() }
+                    if let line = patterns.killerLine { Text(line) }
+                    if let goals = patterns.goals { goalRecord(goals) }
+                    if let s = patterns.suggestion, s.preset != currentGoal {
+                        Text(s.text)
+                            .foregroundStyle(Palette.accent)
+                            .padding(.top, 2)
+                    }
+                    Text("Causes are estimates from the kill feed and scoreboard.")
+                        .font(.caption2)
+                        .foregroundStyle(Palette.secondaryText)
+                        .padding(.top, 2)
+                }
+                .font(.callout)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .transition(.opacity)
+            }
+        }
+    }
+
+    private func goalRecord(_ g: GamePatterns.GoalRecord) -> some View {
+        Text("Goals: \(g.met) met, \(g.nearMiss) near miss, \(g.missed) missed")
+            .monospacedDigit()
     }
 }

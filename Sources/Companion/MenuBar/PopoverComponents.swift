@@ -37,6 +37,21 @@ struct GlassSection<Content: View>: View {
     }
 }
 
+/// the one card title: small, semibold, secondary. every card starts with one (or with a row that acts as one).
+struct CardTitle: View {
+    let text: String
+
+    init(_ text: String) { self.text = text }
+
+    var body: some View {
+        Text(text)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(Palette.secondaryText)
+            .lineLimit(1)
+            .capCentered(style: .caption1, weight: .semibold)
+    }
+}
+
 struct StatusPill: View {
     let text: String
     let live: Bool
@@ -44,7 +59,7 @@ struct StatusPill: View {
     var body: some View {
         HStack(alignment: .capCenter, spacing: 5) {
             if live {
-                Circle().fill(Palette.teal).frame(width: 6, height: 6)
+                Circle().fill(Palette.accent).frame(width: 6, height: 6)
                     .alignmentGuide(.capCenter) { $0[VerticalAlignment.center] }
             }
             Text(text).capCentered(style: .caption1, weight: .medium)

@@ -40,28 +40,21 @@ struct AsleepSection: View {
                 GoalPicker(model: model)
             }
 
-            if model.reviewHint != nil {
-                GlassSection { ReviewLastGameRow(model: model) }
-            }
-
             GlassSection {
-                VStack(spacing: 0) {
+                VStack(alignment: .leading, spacing: 6) {
+                    CardTitle("Recent").popoverRow()
                     if let s = coordinator.lastSession {
                         StatRow(title: "Last session", value: Format.record(wins: s.wins, losses: s.losses))
                     }
-                    StatRow(title: "Goal streak", value: streakText)
+                    StatRow(title: "Goal streak", value: Format.streak(coordinator.goalStreak))
+                    if model.reviewHint != nil {
+                        Divider().padding(.vertical, 2)
+                        ReviewLastGameRow(model: model)
+                    }
                 }
             }
         }
         .animation(reduceMotion ? nil : .smooth(duration: 0.2), value: model.launchState)
-    }
-
-    private var streakText: String {
-        switch coordinator.goalStreak {
-        case 0: "None yet"
-        case 1: "1 game"
-        case let n: "\(n) games"
-        }
     }
 
     private var launchMessage: String? {

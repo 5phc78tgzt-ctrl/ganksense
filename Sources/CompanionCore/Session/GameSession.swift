@@ -15,12 +15,16 @@ final class GameSession {
     var win: Bool?
     var suspended = false
     var goalLatched: GoalProgress?
+    /// last paced-goal reading at or before the goal's deadline (game time, raw value).
+    var goalBefore: (t: Double, value: Double)?
     var spikes = SpikeDetector()
     /// enemy power spikes seen live, for the death-cause estimate.
     var spikeLog: [GameContext.Spike] = []
     var jungler = JunglerTracker()
     var base: BaseBuild?
     var baseFetch: Task<Void, Never>?
+    var augmentsRequested = false
+    var augmentFetch: Task<Void, Never>?
 
     /// a reconnect can report a slightly earlier game time; a bigger jump back means a new game with the same roster.
     private static let gameTimeRewindTolerance: Double = 120
@@ -69,7 +73,7 @@ final class GameSession {
         let duration = last.gameData?.gameTime ?? lastGameTime
         let isVoid = duration < Coordinator.voidThreshold
         let goalResult: GoalProgress? = isVoid ? nil : goalLatched ?? goal.map {
-            GoalTracker.evaluate($0, snapshot: last, catalog: catalog, final: true)
+            GoalTracker.evaluate($0, snapshot: last, catalog: catalog, final: true, before: goalBefore)
         }
         let sortedDeaths = deaths.values.sorted { ($0.time, $0.id) < ($1.time, $1.id) }
         return GameRecord(id: id, date: startDate, champion: champion, role: role, win: win,

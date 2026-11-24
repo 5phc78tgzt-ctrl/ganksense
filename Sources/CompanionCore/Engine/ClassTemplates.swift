@@ -5,9 +5,9 @@ public enum ChampionArchetype: String, CaseIterable, Sendable {
 
     public init(champion: DDChampion) {
         let tags = champion.tags
-        let apLeaning = champion.magic > champion.attack
+        let apLeaning = champion.dealsMostlyMagic
         switch tags.first {
-        case "Marksman": self = .marksman
+        case "Marksman": self = apLeaning ? .mage : .marksman
         case "Mage": self = .mage
         case "Assassin": self = apLeaning ? .mage : .assassinAD
         case "Fighter": self = apLeaning ? .mage : .fighter

@@ -41,6 +41,7 @@ final class StatusItemController: NSObject {
             button.imagePosition = .imageOnly
         }
         trackIcon()
+        trackQueueClock()
         observePulseConditions()
         playLaunchAnimation()
     }
@@ -62,6 +63,8 @@ final class StatusItemController: NSObject {
     private var openState: MenuBarIcon.State = .client
     private var transition: Transition?
     private var transitionTimer: Timer?
+    private var queueTimer: Timer?
+    private var queueClock: Timer?
     private var launching = true
     private var reduceMotion: Bool { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
 
@@ -88,8 +91,9 @@ final class StatusItemController: NSObject {
         let state = currentState
         button.setAccessibilityLabel(state.accessibilityLabel)
         let target: CGFloat = state == .asleep ? 0 : 1
-        if state == .inGame {
-            openState = .inGame
+        if state == .inGame || state == .queue || state == .matchFound {
+            openState = state
+            if state != .inGame { setDot(visible: false, animated: true) }
         } else {
             setDot(visible: false, animated: true)
             if state == .asleep { openState = .client }
@@ -100,11 +104,33 @@ final class StatusItemController: NSObject {
                 guard let self else { return }
                 self.show(self.openness)
                 self.setDot(visible: self.currentState == .inGame, animated: true)
+                self.updateQueueLook()
             }
         } else {
             show(openness)
             setDot(visible: state == .inGame, animated: true)
         }
+        updateQueueLook()
+    }
+
+    /// queue: the squinted eye looks side to side (30 fps image swaps; stopped in every other state).
+    private func updateQueueLook() {
+        queueTimer?.invalidate()
+        queueTimer = nil
+        guard currentState == .queue, openState == .queue, transition == nil, !reduceMotion else { return }
+        let frames = MenuBarIcon.queueFrames()
+        let start = CACurrentMediaTime()
+        // one tick per frame (26 frames over 2.6 s): a faster timer only woke up to find the same frame.
+        let timer = Timer(timeInterval: MenuBarIcon.queueCycle / Double(MenuBarIcon.queueFrameCount), repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.currentState == .queue, self.transition == nil else { return }
+                let phase = ((CACurrentMediaTime() - start) / MenuBarIcon.queueCycle).truncatingRemainder(dividingBy: 1)
+                let image = frames[min(frames.count - 1, Int(phase * Double(frames.count)))]
+                if self.statusItem.button?.image !== image { self.statusItem.button?.image = image }
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        queueTimer = timer
     }
 
     private func run(to target: CGFloat, duration: TimeInterval, completion: @escaping () -> Void) {
@@ -149,13 +175,53 @@ final class StatusItemController: NSObject {
         transitionTimer = nil
         transition = nil
         openness = state == .asleep ? 0 : 1
-        openState = state == .inGame ? .inGame : .client
+        openState = [.inGame, .queue, .matchFound].contains(state) ? state : .client
         let image = MenuBarIcon.image(for: state)
         if button.image !== image {
             button.image = image
             button.setAccessibilityLabel(state.accessibilityLabel)
         }
         setDot(visible: state == .inGame, animated: false)
+    }
+
+    /// time in queue next to the eye ("1:23") while queued or in a ready check, so it's readable from any app.
+    private func trackQueueClock() {
+        let start = withObservationTracking {
+            model.coordinator.queueStartedAt
+        } onChange: { [weak self] in
+            Task { @MainActor in self?.trackQueueClock() }
+        }
+        queueClock?.invalidate()
+        queueClock = nil
+        guard let start else { setClock(nil); return }
+        let tick = { [weak self] in self?.setClock(Self.clock(Date().timeIntervalSince(start))) }
+        tick()
+        let timer = Timer(timeInterval: 0.5, repeats: true) { _ in MainActor.assumeIsolated { tick() } }
+        timer.tolerance = 0.1
+        RunLoop.main.add(timer, forMode: .common)
+        queueClock = timer
+    }
+
+    private func setClock(_ text: String?) {
+        guard let button = statusItem.button else { return }
+        guard let text else {
+            if button.imagePosition != .imageOnly {
+                button.title = ""
+                button.imagePosition = .imageOnly
+            }
+            return
+        }
+        guard button.title != text else { return }
+        button.attributedTitle = NSAttributedString(string: text, attributes: [
+            // the menu bar's own font size, no baseline nudge: AppKit centres it on the icon like the battery %.
+            .font: NSFont.monospacedDigitSystemFont(ofSize: NSFont.menuBarFont(ofSize: 0).pointSize, weight: .regular),
+        ])
+        button.imagePosition = .imageLeading
+    }
+
+    static func clock(_ seconds: TimeInterval) -> String {
+        let s = max(0, Int(seconds))
+        return s >= 3600 ? String(format: "%d:%02d:%02d", s / 3600, s / 60 % 60, s % 60) : String(format: "%d:%02d", s / 60, s % 60)
     }
 
     var isShown: Bool { panel?.isVisible == true }
@@ -171,7 +237,7 @@ final class StatusItemController: NSObject {
         if reduceMotion { applyIcon(state) } else { settle() }
     }
 
-    /// the teal badge, its own view over the eye so core animation can breathe it (opacity 1 to 0.55, scale 1 to
+    /// the azure badge, its own view over the eye so core animation can breathe it (opacity 1 to 0.55, scale 1 to
     /// 0.92, 2.4 s ease-in-out cycle) in the render server: no timers, no image redraws. added on entering the game,
     /// removed once faded out on leaving it; static under reduce motion, paused while the menu bar is hidden or the
     /// screens sleep. the fade runs on the view's layer, the pulse on the dot sublayer, so they do not fight.
@@ -325,8 +391,31 @@ final class StatusItemController: NSObject {
     }
 
     @objc private func buttonClicked(_ sender: Any?) {
-        toggle()
+        let event = NSApp.currentEvent
+        if event?.type == .rightMouseUp || event?.modifierFlags.contains(.control) == true {
+            showMenu()
+        } else {
+            toggle()
+        }
     }
+
+    /// right-click: settings and quit, as a regular menu under the icon.
+    private func showMenu() {
+        if isShown { close() }
+        let menu = NSMenu()
+        let settings = NSMenuItem(title: "Settings…", action: #selector(openSettingsFromMenu), keyEquivalent: ",")
+        settings.target = self
+        menu.addItem(settings)
+        menu.addItem(.separator())
+        menu.addItem(NSMenuItem(title: "Quit \(AppInfo.name)", action: #selector(NSApplication.terminate(_:)),
+                                keyEquivalent: "q"))
+        // attaching the menu only for this click keeps a left-click on the popover.
+        statusItem.menu = menu
+        statusItem.button?.performClick(nil)
+        statusItem.menu = nil
+    }
+
+    @objc private func openSettingsFromMenu() { model.openSettings?() }
 
     func toggle() {
         if isShown {
@@ -344,6 +433,7 @@ final class StatusItemController: NSObject {
         // a non-activating panel becomes key without activating the app (no focus steal from the game or client,
         // and no dependence on the system granting activation), so escape and the shortcuts work straight away.
         panel.makeKeyAndOrderFront(nil)
+        refreshShadow(panel)
         statusItem.button?.highlight(true)
         installOutsideClickMonitor()
     }
@@ -373,7 +463,17 @@ final class StatusItemController: NSObject {
         panel.isReleasedWhenClosed = false
         panel.hidesOnDeactivate = false
         panel.animationBehavior = .utilityWindow
-        panel.contentView = glass
+        // clip the window's backing to the glass's rounded shape: the window server derives the shadow from the
+        // backing's alpha, and an unclipped corner pixel there is what drew a rectangular dark outline.
+        let container = NSView()
+        container.wantsLayer = true
+        container.layer?.cornerRadius = 18
+        container.layer?.cornerCurve = .continuous
+        container.layer?.masksToBounds = true
+        glass.frame = container.bounds
+        glass.autoresizingMask = [.width, .height]
+        container.addSubview(glass)
+        panel.contentView = container
         panel.onCancel = { [weak self] in self?.close() }
 
         // the content height changes with the phase (asleep / client / in game): keep the top edge under the icon.
@@ -407,6 +507,13 @@ final class StatusItemController: NSObject {
         let top = min(anchor.minY, visible.maxY) - Self.gap
         panel.setFrame(NSRect(x: x.rounded(), y: (top - size.height).rounded(), width: size.width,
                               height: size.height), display: true)
+        refreshShadow(panel)
+    }
+
+    /// a borderless window's shadow is cached from its first rendered frame; recompute it once the resized glass has drawn,
+    /// otherwise the shadow keeps the old (rectangular, or other-height) outline.
+    private func refreshShadow(_ panel: NSPanel) {
+        DispatchQueue.main.async { [weak panel] in panel?.invalidateShadow() }
     }
 
     private func closeFromFocusLoss() {

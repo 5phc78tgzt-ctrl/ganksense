@@ -190,3 +190,26 @@ public struct ChampionCatalog: Sendable {
         return ChampionCatalog(version: version, champions: file.data.values.sorted { $0.id < $1.id })
     }
 }
+
+extension DDChampion {
+    /// share of this champion's damage that is physical, 0…1. data dragon's `info` ratings describe auto-attack vs
+    /// ability strength, not damage type, and some are placeholders (qiyana 0/4, vex 0/0), so champions whose rating
+    /// misleads are listed by id. used by the archetype, the enemy damage split and the champ select team check.
+    public var physicalShare: Double {
+        if let share = Self.physicalShareOverrides[id] { return share }
+        guard attack + magic > 0 else { return 0.5 }
+        return Double(attack) / Double(attack + magic)
+    }
+
+    /// true when the champion mostly deals magic damage.
+    public var dealsMostlyMagic: Bool { physicalShare < 0.5 }
+
+    static let physicalShareOverrides: [String: Double] = [
+        // physical damage, rated as ap-leaning or blank
+        "Qiyana": 0.9, "Belveth": 0.9, "Akshan": 0.9,
+        // magic damage, rated as ad-leaning, even or blank
+        "Gwen": 0.1, "Vex": 0.05, "Seraphine": 0.1, "Teemo": 0.2, "Kayle": 0.35, "TwistedFate": 0.15,
+        "Mordekaiser": 0.05, "Diana": 0.15, "Fizz": 0.2, "Ekko": 0.15, "Elise": 0.15, "Azir": 0.1, "Hwei": 0.05,
+        "Kennen": 0.2, "Evelynn": 0.1, "Akali": 0.15, "Gragas": 0.15, "Nidalee": 0.3,
+    ]
+}

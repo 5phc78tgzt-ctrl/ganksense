@@ -3,17 +3,21 @@ import AppKit
 import CompanionCore
 
 ///
-/// hidden debug flags (for screenshots): --overlay-preview shows the overlay with static demo data until quit;
+/// hidden debug flags (for screenshots): --scout-preview shows the loading screen scout card with sample players until quit;
+/// --overlay-preview [aram] shows the overlay with static demo data (aram: howling abyss look) until quit;
 /// --review-preview [victory|defeat|none] shows the death review for a sample demo game with that result (default
 /// victory);
 /// --settings-preview <general|overlay|goals|tilt> shows the settings view in a plain window on that tab;
 /// --render-menu-icons <dir> writes the menu bar icons to png sheets and quits;
-/// --popover-preview <asleep|client|ingame> shows the menu bar popover in a floating window. all three stay
+/// --popover-preview <asleep|client|ingame|champselect|patterns|scout> shows the menu bar popover in a floating window
+/// (champselect also shows the champ select banner above a stand-in 1280x720 client; --banner-client <width> sets it). all stay
 /// until quit, at fixed positions on the primary screen.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let model = AppModel()
     private var overlay: OverlayController?
+    private var banner: ChampSelectBannerController?
+    private var scoutCard: ScoutCardController?
     private var deathReview: DeathReviewWindow?
     private var popoverPreview: PopoverPreview?
     private var settingsPreviewWindow: NSWindow?
@@ -31,6 +35,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let overlay = OverlayController(model: model)
         overlay.start()
         self.overlay = overlay
+        let scoutCard = ScoutCardController(model: model)
+        scoutCard.start()
+        self.scoutCard = scoutCard
+        if PopoverPreview.mode(from: ProcessInfo.processInfo.arguments) == nil {
+            let banner = ChampSelectBannerController(model: model)
+            banner.start()
+            self.banner = banner
+            if ProcessInfo.processInfo.arguments.contains("--banner-demo") { model.startBannerDemo() }
+        }
         let deathReview = DeathReviewWindow(coordinator: model.coordinator)
         deathReview.start()
         self.deathReview = deathReview
@@ -42,6 +55,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let args = ProcessInfo.processInfo.arguments
         if args.contains("--overlay-preview") { overlay.showPreview(persistent: true) }
+        if args.contains("--scout-preview") { scoutCard.showPreview(PopoverPreview.sampleScout) }
         if args.contains("--review-preview") {
             Task {
                 let variant = args.firstIndex(of: "--review-preview").flatMap { i in args.indices.contains(i + 1) ? args[i + 1] : nil }
@@ -50,7 +64,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 case "remake", "none": nil
                 default: true
                 }
-                if let record = await PreviewData.reviewRecord(win: win) { deathReview.showPreview(record) }
+                if let record = await PreviewData.reviewRecord(win: win) { deathReview.showPreview(record, patternLine: "Last 10 games: most common likely cause was jungler gank (41% of deaths)") }
             }
         }
         if args.contains("--settings-preview") {

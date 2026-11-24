@@ -226,7 +226,7 @@ private struct SliderControl: View {
             Slider(value: $value, in: range, step: step)
                 .controlSize(.small)
                 .frame(width: SettingsMetrics.sliderWidth)
-            Text("\(Int((value * 100).rounded())) %")
+            Text("\(Int((value * 100).rounded()))%")
                 .monospacedDigit()
                 .frame(width: SettingsMetrics.valueWidth, alignment: .trailing)
         }
@@ -254,6 +254,17 @@ private struct GeneralSettings: View {
                         model.setting(\.launchAtLogin).wrappedValue = now
                     }
                 ))
+            }
+        }
+        SettingsSection(header: "Queue") {
+            SettingRow(title: "Accept matches automatically",
+                       hint: "Accepts the ready check as soon as it opens. You can still decline in the client.") {
+                SettingSwitch(isOn: model.setting(\.autoAccept))
+            }
+            RowDivider()
+            SettingRow(title: "Notify when a match is found",
+                       hint: "Only when the League client isn't in front.") {
+                SettingSwitch(isOn: model.setting(\.notifyMatchFound))
             }
         }
         SettingsSection(header: "Builds",
@@ -337,9 +348,13 @@ private struct OverlaySettings: View {
                        hint: "Reads the Tab key state only while League is in front. Nothing is recorded.") {
                 SettingSwitch(isOn: model.setting(\.showWhileHoldingTab))
             }
+            RowDivider()
+            SettingRow(title: "Show gold lead",
+                       hint: "While holding Tab: item gold, your team and lane against the enemy. An estimate from items owned.") {
+                SettingSwitch(isOn: model.setting(\.showGoldLead))
+            }
         }
-        SettingsSection(header: "Appearance",
-                        footer: "The overlay shows over League in Borderless or Windowed mode only.") {
+        SettingsSection(header: "Appearance") {
             SettingRow(title: "Position") {
                 Picker("", selection: model.setting(\.overlayCorner)) {
                     ForEach(OverlayAnchor.allCases, id: \.self) { anchor in
@@ -353,11 +368,38 @@ private struct OverlaySettings: View {
             SettingRow(title: "Size") {
                 SliderControl(value: model.setting(\.overlayScale), range: 0.8...1.3, step: 0.05)
             }
+            RowDivider()
+            SettingRow(title: "Champ select banner",
+                       hint: "Automatic uses a slim bar when the full banner would cover the League client, like on a laptop screen.") {
+                Picker("", selection: model.setting(\.bannerStyle)) {
+                    Text("Automatic").tag(BannerStyle.auto)
+                    Text("Full").tag(BannerStyle.full)
+                    Text("Slim").tag(BannerStyle.slim)
+                }
+                .labelsHidden()
+                .fixedSize()
+            }
         }
-        Button("Show overlay preview") { model.showOverlayPreview?() }
+        HStack {
+            Spacer()
+            Button(model.champSelectPreview ? "Hide banner preview" : "Show banner preview") {
+                if model.champSelectPreview { model.endBannerDemo() } else { model.startBannerDemo() }
+            }
             .buttonStyle(.bordered)
-            .frame(maxWidth: .infinity, alignment: .trailing)
-            .disabled(model.showOverlayPreview == nil)
+            .disabled(model.coordinator.phase == .client(.champSelect))
+            .help("The champ select banner with sample data, above the League client or where it would be")
+            if let end = model.overlayPreviewEndsAt {
+                TimelineView(.periodic(from: .now, by: 0.25)) { context in
+                    Button("Showing… \(max(1, Int(end.timeIntervalSince(context.date).rounded(.up))))s") {}
+                        .buttonStyle(.bordered)
+                        .disabled(true)
+                }
+            } else {
+                Button("Show overlay preview") { model.showOverlayPreview?() }
+                    .buttonStyle(.bordered)
+                    .disabled(model.showOverlayPreview == nil)
+            }
+        }
     }
 
     static func title(_ anchor: OverlayAnchor) -> String {
@@ -375,12 +417,19 @@ private struct GoalSettings: View {
 
     var body: some View {
         SettingsSection(header: "Targets",
-                        footer: "One target per goal, used in every game. Choose the goal for your next game from the menu bar icon.") {
+                        footer: "One target and minute per goal, used in every game. Choose the goal for your next game from the menu bar icon.") {
             ForEach(Array(GoalPreset.allCases.enumerated()), id: \.element) { index, preset in
                 if index > 0 { RowDivider() }
-                SettingRow(title: preset.title) {
+                SettingRow(title: model.coordinator.settings.title(for: preset)) {
                     ValueStepper(text: GoalTargetText.text(model.coordinator.settings.target(for: preset), preset),
                                  value: target(preset), range: GoalPicker.range(preset), step: GoalPicker.step(preset))
+                }
+                if let minutes = model.coordinator.settings.minutes(for: preset) {
+                    RowDivider()
+                    SettingRow(title: preset == .deathsBefore14 ? "Counted until" : "Checked at") {
+                        ValueStepper(text: "\(minutes):00", value: minutesBinding(preset),
+                                     range: GoalPicker.minutesRange, step: 1)
+                    }
                 }
             }
         }
@@ -392,7 +441,18 @@ private struct GoalSettings: View {
         }
         .buttonStyle(.bordered)
         .frame(maxWidth: .infinity, alignment: .trailing)
-        .disabled(model.coordinator.settings.goalTargets.isEmpty)
+        .disabled(model.coordinator.settings.goalTargets.isEmpty && model.coordinator.settings.goalMinutes.isEmpty)
+    }
+
+    private func minutesBinding(_ preset: GoalPreset) -> Binding<Double> {
+        Binding(
+            get: { Double(model.coordinator.settings.minutes(for: preset) ?? 0) },
+            set: { value in
+                var s = model.coordinator.settings
+                s.setMinutes(Int(value.rounded()), for: preset)
+                model.coordinator.updateSettings(s)
+            }
+        )
     }
 
     private func target(_ preset: GoalPreset) -> Binding<Double> {

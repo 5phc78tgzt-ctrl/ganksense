@@ -34,8 +34,18 @@ public actor DataDragon {
         return try ChampionCatalog.decode(data, version: version)
     }
 
+    public func icons(version: String) async throws -> IconCatalog {
+        try IconCatalog.decode(runes: try await load(version: version, file: "runesReforged.json"),
+                               spells: try await load(version: version, file: "summoner.json"), version: version)
+    }
+
     public nonisolated func itemIconURL(id: Int, version: String) -> URL {
         URL(string: "\(Self.base)/cdn/\(version)/img/item/\(id).png")!
+    }
+
+    /// square champion portrait; `id` is data dragon's champion id ("MonkeyKing"), not the display name.
+    public nonisolated func championIconURL(id: String, version: String) -> URL {
+        URL(string: "\(Self.base)/cdn/\(version)/img/champion/\(id).png")!
     }
 
     /// newest cached version that has both catalogs, decoded.
@@ -57,8 +67,11 @@ public actor DataDragon {
         if let d = try? Data(contentsOf: local) { return d }
         let data = try await fetch(URL(string: "\(Self.base)/cdn/\(version)/data/en_US/\(file)")!)
         // validate before caching so a bad payload never poisons the cache.
-        if file == "item.json" { _ = try ItemCatalog.decode(data, version: version) }
-        else { _ = try ChampionCatalog.decode(data, version: version) }
+        switch file {
+        case "item.json": _ = try ItemCatalog.decode(data, version: version)
+        case "champion.json": _ = try ChampionCatalog.decode(data, version: version)
+        default: _ = try JSONSerialization.jsonObject(with: data)
+        }
         try? FileManager.default.createDirectory(at: local.deletingLastPathComponent(), withIntermediateDirectories: true)
         try? data.write(to: local, options: .atomic)
         return data

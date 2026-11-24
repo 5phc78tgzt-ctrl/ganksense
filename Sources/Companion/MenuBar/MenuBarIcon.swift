@@ -3,14 +3,16 @@ import SwiftUI
 import CompanionCore
 
 /// menu bar glyphs: template images (black on clear) that the menu bar tints for light, dark and highlighted
-/// states. the one accent, the teal in-game dot, is a separate layer on the status button (status item controller).
+/// states. the one accent, the azure in-game dot, is a separate layer on the status button (status item controller).
 enum MenuBarIcon {
     enum State: Equatable {
-        case asleep, client, inGame
+        case asleep, client, queue, matchFound, inGame
 
         init(_ phase: AppPhase) {
             switch phase {
             case .asleep: self = .asleep
+            case .client(.matchmaking): self = .queue
+            case .client(.readyCheck): self = .matchFound
             case .client, .postGame: self = .client
             case .inGame: self = .inGame
             }
@@ -20,6 +22,8 @@ enum MenuBarIcon {
             switch self {
             case .asleep: "\(AppInfo.name), League closed"
             case .client: "\(AppInfo.name), League open"
+            case .queue: "\(AppInfo.name), searching for a match"
+            case .matchFound: "\(AppInfo.name), match found"
             case .inGame: "\(AppInfo.name), in game"
             }
         }
@@ -33,7 +37,7 @@ enum MenuBarIcon {
 
     private static var eyeConfig: NSImage.SymbolConfiguration { .init(pointSize: 12, weight: .medium) }
 
-    static let accent = NSColor(srgbRed: 0x0A / 255, green: 0xC8 / 255, blue: 0xB9 / 255, alpha: 1)
+    static let accent = NSColor(srgbRed: 0x3B / 255, green: 0x9E / 255, blue: 0xFF / 255, alpha: 1)
 
     @MainActor private static var cache: [State: NSImage] = [:]
 
@@ -94,7 +98,85 @@ enum MenuBarIcon {
     }
 
     private static func make(_ state: State) -> NSImage {
-        state == .asleep ? makeAsleep() : makeEye(state)
+        switch state {
+        case .asleep: makeAsleep()
+        case .queue: queueFrame(look: 0)
+        case .matchFound: makeMatchFound()
+        case .client, .inGame: makeEye(state)
+        }
+    }
+
+    /// queue: a squinted eye hunting for something. `look` -1...1 slides the pupil across.
+    static let queueCycle: TimeInterval = 2.6
+    static let queueFrameCount = 26
+
+    /// pupil position over one cycle: centre, left, hold, right, hold, back (eased moves between holds).
+    static func queueLook(at phase: Double) -> CGFloat {
+        let keys: [(Double, CGFloat)] = [(0, 0), (0.12, -1), (0.42, -1), (0.58, 1), (0.88, 1), (1, 0)]
+        for i in 1..<keys.count where phase <= keys[i].0 {
+            let (t0, v0) = keys[i - 1], (t1, v1) = keys[i]
+            let f = CGFloat((phase - t0) / (t1 - t0))
+            return v0 + (v1 - v0) * smoothstep(f)
+        }
+        return 0
+    }
+
+    @MainActor private static var queueCache: [NSImage] = []
+
+    @MainActor
+    static func queueFrames() -> [NSImage] {
+        if queueCache.isEmpty {
+            queueCache = (0..<queueFrameCount).map { queueFrame(look: queueLook(at: Double($0) / Double(queueFrameCount))) }
+        }
+        return queueCache
+    }
+
+    private static func queueFrame(look: CGFloat) -> NSImage {
+        let image = NSImage(size: NSSize(width: 22, height: 18), flipped: false) { rect in
+            NSColor.black.set()
+            let left = NSPoint(x: 3.2, y: rect.midY), right = NSPoint(x: 18.1, y: rect.midY)
+            let lift: CGFloat = 4.6
+            let lid = NSBezierPath()
+            lid.move(to: left)
+            lid.curve(to: right, controlPoint1: NSPoint(x: left.x + 4.5, y: left.y + lift),
+                      controlPoint2: NSPoint(x: right.x - 4.5, y: right.y + lift))
+            lid.curve(to: left, controlPoint1: NSPoint(x: right.x - 4.5, y: right.y - lift),
+                      controlPoint2: NSPoint(x: left.x + 4.5, y: left.y - lift))
+            lid.lineWidth = 1.6
+            lid.lineJoinStyle = .round
+            lid.stroke()
+            let r: CGFloat = 1.9
+            NSBezierPath(ovalIn: NSRect(x: rect.midX + look * 3.4 - r, y: rect.midY - r, width: r * 2, height: r * 2)).fill()
+            return true
+        }
+        image.isTemplate = true
+        image.accessibilityDescription = State.queue.accessibilityLabel
+        return image
+    }
+
+    /// match found: the open eye, wide awake, with three alert rays above it.
+    private static func makeMatchFound() -> NSImage {
+        let symbol = NSImage(systemSymbolName: "eye", accessibilityDescription: nil)?.withSymbolConfiguration(eyeConfig)
+        let image = NSImage(size: NSSize(width: 22, height: 18), flipped: false) { rect in
+            if let symbol {
+                let s = symbol.size
+                symbol.draw(in: NSRect(origin: NSPoint(x: (rect.width - s.width) / 2, y: (rect.height - s.height) / 2 - 1.5),
+                                       size: s).integral)
+            }
+            NSColor.black.set()
+            let rays = NSBezierPath()
+            for (x, dx, h) in [(6.0, -1.6, 2.6), (11.0, 0.0, 3.4), (16.0, 1.6, 2.6)] as [(CGFloat, CGFloat, CGFloat)] {
+                rays.move(to: NSPoint(x: x, y: 14.4))
+                rays.line(to: NSPoint(x: x + dx, y: 14.4 + h))
+            }
+            rays.lineWidth = 1.5
+            rays.lineCapStyle = .round
+            rays.stroke()
+            return true
+        }
+        image.isTemplate = true
+        image.accessibilityDescription = State.matchFound.accessibilityLabel
+        return image
     }
 
     /// the in-game badge dot, in icon coordinates (origin bottom-left of the 22 x 18 box): on the eye's lower-right

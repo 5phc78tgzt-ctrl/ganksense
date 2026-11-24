@@ -12,6 +12,15 @@ import Testing
     #expect(b.situational == [3036, 3033, 3026, 3072, 3139])
 }
 
+@Test func ranksAramAugmentsAndSkipsUnnamed() throws {
+    let text = try #require(OPGGTestSupport.extractText(OPGGFixtures.augmentsResponse))
+    let (headers, root) = try OPGGParser.parse(text)
+    let list = OPGGClient.augments(from: root, headers: headers)
+    // best performance first; the unnamed row is dropped; capped at five.
+    #expect(list.map(\.id) == [1389, 1335, 1315, 1322, 1080])
+    #expect(list.first?.name == "Hand of Baron")
+}
+
 @Suite(.serialized)
 struct OPGGClientTests {
     let cacheDir = OPGGTestSupport.freshCacheDir()

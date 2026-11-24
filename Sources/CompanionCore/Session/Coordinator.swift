@@ -39,6 +39,8 @@ public final class Coordinator {
     public private(set) var spikeAlerts: [SpikeAlert] = []
     /// informational enemy-jungler line (coarse, changes rarely); nil when unknown, stale or disabled.
     public private(set) var jungler: JunglerStatus?
+    /// item gold lead for the tab card; nil when disabled, unsupported or unknown. assigned only on change.
+    public private(set) var goldLead: GoldLead?
     public private(set) var tilt: TiltStatus?
     public private(set) var settings = Settings()
     /// consecutive most recent non-void games whose goal was achieved (games without a goal are skipped).
@@ -52,6 +54,8 @@ public final class Coordinator {
     public private(set) var itemCatalog: ItemCatalog?
     /// primary likely-cause counts over the deaths of the 20 most recent games (death analyzer; "unclear" included).
     public private(set) var deathCauseStats: [DeathCause: Int] = [:]
+    /// patterns over the last 10 games with a result; nil below 3 games. recomputed only when records change.
+    public private(set) var patterns: GamePatterns?
 
     /// all stored games, oldest first.
     public private(set) var records: [GameRecord] = []
@@ -60,8 +64,26 @@ public final class Coordinator {
     public private(set) var champSelectInfo: ChampSelectInfo?
     /// base build in use for the current game (op.gg or template).
     public private(set) var baseBuild: BaseBuild?
+    /// howling abyss only: the champion's best augments from op.gg; empty until fetched, or when unknown.
+    public private(set) var augments: [AramAugment] = []
+    /// when the current queue started (from the client's time in queue); nil outside matchmaking and ready checks.
+    public private(set) var queueStartedAt: Date?
+    /// the client's queue time estimate in whole seconds.
+    public private(set) var queueEstimate: Double?
+    /// the live game's clock has started, in any mode (the snapshot is only kept for modes with live features).
+    /// false through the loading screen; reset when a game ends or the client goes back to pre-game.
+    public private(set) var gameClockRunning = false
+    @ObservationIgnored private var readyCheckHandled = false
+    /// champ select rune page, spells, ban ideas and the lane matchup tip (kept through the game).
+    public let advisor = ChampSelectAdvisor()
+    /// loading screen scout: both teams with ranks while the game is in progress (memory only).
+    public let scout = ScoutTracker()
     /// called once each time the tilt guard starts nudging (reason goes from none to some, or changes kind).
     @ObservationIgnored public var onTiltNudge: ((String) -> Void)?
+    /// called once per howling abyss game with the reported game mode string (to verify variants in a real game).
+    @ObservationIgnored public var onHowlingAbyssGame: ((String) -> Void)?
+    /// called once per ready check, after the auto-accept attempt: true when ganksense accepted it.
+    @ObservationIgnored public var onMatchFound: ((Bool) -> Void)?
 
     public nonisolated static let livePollInterval: Duration = .seconds(1)
     public nonisolated static let clientPollInterval: Duration = .seconds(2)
@@ -172,6 +194,7 @@ public final class Coordinator {
         tiltTask = nil
         bootTask = nil
         session?.baseFetch?.cancel()
+        session?.augmentFetch?.cancel()
     }
 
     public func leagueProcessChanged(clientRunning: Bool, gameRunning: Bool) {
@@ -185,6 +208,8 @@ public final class Coordinator {
         if !clientRunning {
             client = nil
             lcuPhase = nil
+            if queueStartedAt != nil { queueStartedAt = nil }
+            queueEstimate = nil
         }
         if gameStarted { finishedLatch = false }
         if gameExited { handleGameProcessExit() }
@@ -204,10 +229,17 @@ public final class Coordinator {
         persist { store in await store.save(s) }
         if old.tilt != s.tilt { evaluateTilt() }
         if old.showJunglerLine != s.showJunglerLine, !s.showJunglerLine { jungler = nil }
-        if old.goal != s.goal || old.goalTargets != s.goalTargets, let game = session {
+        if old.showGoldLead != s.showGoldLead, let game = session, snapshot != nil { recompute(game) }
+        if old.goal != s.goal || old.goalTargets != s.goalTargets || old.goalMinutes != s.goalMinutes, let game = session {
             game.goalLatched = nil
+            game.goalBefore = nil
             updateGoal(game)
         }
+    }
+
+    /// a scout row was opened: fetches that player's champion pool (op.gg, only when enabled).
+    public func scoutLoadPool(playerID: String) {
+        scout.loadPool(playerID: playerID, env: scoutEnv)
     }
 
     public func dismissReview() {
@@ -346,6 +378,9 @@ private extension Coordinator {
 
     func goToSleep() {
         if session != nil { finalize() }
+        advisor.reset()
+        scout.reset()
+        if gameClockRunning { gameClockRunning = false }
         stopClientLoop()
         stopLiveLoop()
         prefetchTask?.cancel()
@@ -365,6 +400,8 @@ private extension Coordinator {
         lcuPhase = p
         if Self.postGamePhases.contains(p) { awaitingPostGameRefresh = true }
         if Self.preGamePhases.contains(p) { enterPreGame() }
+        if p != .champSelect { advisor.leftChampSelect(keepMatchup: !Self.preGamePhases.contains(p)) }
+        scout.phase(p, env: scoutEnv)
         if let game = session, game.suspended, !Self.gameAlivePhases.contains(p) { finalize() }
         if !tiltFetchedForClient { refreshTilt() }
         reconcile()
@@ -372,6 +409,7 @@ private extension Coordinator {
 
     func enterPreGame() {
         finishedLatch = false
+        if gameClockRunning { gameClockRunning = false }
         // the client adds the finished game to match history only after the end-of-game screen, so the
         // fetch in `finalize()` can miss it: fetch once more now (once per game end).
         guard awaitingPostGameRefresh else { return }
@@ -380,8 +418,13 @@ private extension Coordinator {
     }
 
     func handleChampSelect(_ info: ChampSelectInfo?) {
+        // keyed inside: a poll that changes nothing costs a comparison.
+        if let info { advisor.champSelect(info, env: adviceEnv) }
         guard let info, info != champSelectInfo else { return }
+        let previous = champSelectInfo
         champSelectInfo = info
+        // enemy hovers and bans change the info too; only my own pick or role restarts the prefetch.
+        guard previous == nil || previous?.championKey != info.championKey || previous?.role != info.role else { return }
         guard let key = info.championKey, let champion = championCatalog?.champion(key: key) else { return }
         prefetchBaseBuild(for: champion, role: info.role)
     }
@@ -394,7 +437,7 @@ private extension Coordinator {
         let championID = champion.id
         let role = role ?? Self.defaultRole(for: ChampionArchetype(champion: champion))
         prefetchTask = Task { [weak self] in
-            let build = await buildSource.baseBuild(championID: championID, role: role)
+            let build = await buildSource.baseBuild(championID: championID, role: role, aram: false)
             guard !Task.isCancelled else { return }
             self?.prefetchedBase = build
         }
@@ -449,6 +492,8 @@ private extension Coordinator {
         }
         guard !Task.isCancelled else { return }
         handlePhase(p)
+        await handleMatchmaking(p, client: client)
+        guard !Task.isCancelled else { return }
         guard p == .champSelect, let info = try? await client.champSelect(), !Task.isCancelled else { return }
         handleChampSelect(info)
     }
@@ -498,12 +543,14 @@ private extension Coordinator {
 
     func handleSnapshot(_ s: LiveGameSnapshot) {
         notRunningStreak = 0
+        let clock = (s.gameData?.gameTime ?? 0) > 0
+        if clock != gameClockRunning { gameClockRunning = clock }
         guard s.isReady, let me = s.me else {
             handleNotReady()
             return
         }
-        // summoner's rift (and the unrecorded practice tool) only: other modes (aram, arena, custom maps) get no session, so no goal result, death
-        // review or history entry.
+        // summoner's rift, the practice tool and howling abyss only: other modes (arena, custom maps) get no session.
+        // only summoner's rift is recorded (goal result, death review, history entry).
         guard s.hasLiveFeatures else {
             if session != nil { finalize() }
             liveResponding = true
@@ -534,6 +581,7 @@ private extension Coordinator {
         let game = newSession(s, me: me, roster: roster, gameTime: gameTime)
         session = game
         goalProgress = nil
+        if s.isHowlingAbyss { onHowlingAbyssGame?(s.gameData?.gameMode ?? "") }
         return game
     }
 
@@ -562,12 +610,25 @@ private extension Coordinator {
 
 
 private extension Coordinator {
+    var scoutEnv: ScoutTracker.Env {
+        .init(scout: client as? ScoutSource, pool: buildSource as? ChampionPoolSource, poolEnabled: settings.useOPGG,
+              sleep: sleep)
+    }
+
+    var adviceEnv: ChampSelectAdvisor.Env {
+        .init(source: buildSource as? ChampSelectAdviceSource, catalog: championCatalog, enabled: settings.useOPGG,
+              sleep: sleep)
+    }
+
     func recompute(_ game: GameSession) {
         guard let s = snapshot else { return }
+        advisor.inGame(s, env: adviceEnv)
         if let engine { updateBuildOutputs(game, snapshot: s, engine: engine) }
         // independent of the engine; assign only on change so an unchanged line never invalidates observers.
-        let line = settings.showJunglerLine ? game.jungler.update(s) : nil
+        let line = settings.showJunglerLine && !s.isHowlingAbyss ? game.jungler.update(s) : nil
         if line != jungler { jungler = line }
+        let lead = settings.showGoldLead ? GoldLead.compute(snapshot: s, catalog: itemCatalog) : nil
+        if lead != goldLead { goldLead = lead }
         updateGoal(game)
     }
 
@@ -576,6 +637,7 @@ private extension Coordinator {
         threat = ThreatProfile.analyze(enemies: s.enemies, catalog: engine.catalog, champions: engine.champions,
                                        gameTime: gameTime, classifier: engine.classifier)
         ensureBaseBuild(game, snapshot: s, engine: engine)
+        ensureAugments(game, snapshot: s, engine: engine)
         suggestion = engine.suggest(snapshot: s, base: game.base, previous: suggestion)
         let alerts = game.spikes.update(s, catalog: engine.catalog)
         game.logSpikes(alerts, at: gameTime)
@@ -583,6 +645,10 @@ private extension Coordinator {
     }
 
     func updateGoal(_ game: GameSession) {
+        if game.lastSnapshot?.isHowlingAbyss == true {
+            if goalProgress != nil { goalProgress = nil }
+            return
+        }
         if let latched = game.goalLatched {
             goalProgress = latched
             return
@@ -591,7 +657,11 @@ private extension Coordinator {
             goalProgress = nil
             return
         }
-        let progress = GoalTracker.evaluate(goal, snapshot: s, catalog: itemCatalog, final: false)
+        if let deadline = goal.deadline, let t = s.gameData?.gameTime, t <= deadline,
+           let value = GoalTracker.pacedValue(goal, snapshot: s, catalog: itemCatalog) {
+            game.goalBefore = (t, value)
+        }
+        let progress = GoalTracker.evaluate(goal, snapshot: s, catalog: itemCatalog, final: false, before: game.goalBefore)
         if progress.state == .achieved || progress.state == .failed { game.goalLatched = progress }
         goalProgress = progress
     }
@@ -602,7 +672,9 @@ private extension Coordinator {
         let champion = Self.champion(of: me, in: engine.champions)
         let championID = champion?.id ?? me.championID
         guard game.base?.champion != championID else { return }
-        if let prefetched = prefetchedBase, prefetched.champion == championID {
+        let aram = s.isHowlingAbyss
+        // the champ select prefetch is a ranked build.
+        if !aram, let prefetched = prefetchedBase, prefetched.champion == championID {
             setBaseBuild(prefetched, for: game)
             return
         }
@@ -613,16 +685,30 @@ private extension Coordinator {
         } ?? ClassTemplates.baseBuild(archetype: .fighter, champion: championID, role: role, catalog: catalog,
                                       patch: catalog.version)
         setBaseBuild(template, for: game)
-        fetchOPGGBuild(for: game, championID: championID, role: role)
+        fetchOPGGBuild(for: game, championID: championID, role: role, aram: aram)
     }
 
-    func fetchOPGGBuild(for game: GameSession, championID: String, role: Role) {
+    func fetchOPGGBuild(for game: GameSession, championID: String, role: Role, aram: Bool) {
         guard settings.useOPGG, let buildSource, game.baseFetch == nil else { return }
         game.baseFetch = Task { [weak self, weak game] in
-            guard let build = await buildSource.baseBuild(championID: championID, role: role), !Task.isCancelled,
+            guard let build = await buildSource.baseBuild(championID: championID, role: role, aram: aram),
+                  !Task.isCancelled,
                   let self, let game, self.session === game else { return }
             self.setBaseBuild(build, for: game)
             if self.snapshot != nil { self.recompute(game) }
+        }
+    }
+
+    /// howling abyss: the champion's best augments, fetched once per game (a failed fetch is not retried).
+    func ensureAugments(_ game: GameSession, snapshot s: LiveGameSnapshot, engine: CounterBuildEngine) {
+        guard s.isHowlingAbyss, !game.augmentsRequested, let me = s.me,
+              let key = Self.champion(of: me, in: engine.champions)?.key, key > 0 else { return }
+        game.augmentsRequested = true
+        guard settings.useOPGG, let buildSource else { return }
+        game.augmentFetch = Task { [weak self, weak game] in
+            let list = await buildSource.augments(championKey: key)
+            guard !Task.isCancelled, let self, let game, self.session === game else { return }
+            self.augments = list
         }
     }
 
@@ -654,11 +740,16 @@ private extension Coordinator {
     }
 
     func clearLiveOutputs() {
+        if gameClockRunning { gameClockRunning = false }
+        advisor.reset()
+        scout.clearData()
         snapshot = nil
         suggestion = nil
         threat = nil
         jungler = nil
+        goldLead = nil
         baseBuild = nil
+        augments = []
         spikeTask?.cancel()
         spikeTask = nil
         spikeQueue = []
@@ -673,8 +764,9 @@ private extension Coordinator {
         guard let game = session else { return }
         session = nil
         game.baseFetch?.cancel()
+        game.augmentFetch?.cancel()
         guard let last = game.lastSnapshot else { return }
-        if last.isPracticeTool {
+        if !last.isRecordable {
             resetAfterGame(game, goalResult: nil)
             return
         }
@@ -763,6 +855,8 @@ private extension Coordinator {
         goalStreak = stats.goalStreak
         lastSession = stats.lastSession
         deathCauseStats = stats.deathCauses
+        let patterns = GamePatterns.compute(records: records)
+        if patterns != self.patterns { self.patterns = patterns }
     }
 
     /// store writes run one after another, in call order.
@@ -773,5 +867,40 @@ private extension Coordinator {
             await previous?.value
             await operation(store)
         }
+    }
+}
+
+
+extension Coordinator {
+    /// queue clock while queued, and the ready check: auto-accept (when on, and the player hasn't answered) then
+    /// `onmatchfound`, once per ready check.
+    func handleMatchmaking(_ p: GameflowPhase, client: ClientSource) async {
+        guard p == .matchmaking || p == .readyCheck else {
+            if queueStartedAt != nil { queueStartedAt = nil }
+            if queueEstimate != nil { queueEstimate = nil }
+            readyCheckHandled = false
+            return
+        }
+        let source = client as? MatchmakingSource
+        let search = await source?.queueSearch()
+        guard !Task.isCancelled else { return }
+        let start = search.map { now().addingTimeInterval(-$0.timeInQueue) } ?? queueStartedAt ?? now()
+        // the poll runs every 2 s: only a real jump moves the clock, so it doesn't stutter.
+        if queueStartedAt.map({ abs($0.timeIntervalSince(start)) > 2 }) ?? true { queueStartedAt = start }
+        let estimate = search?.estimate.map { $0.rounded() }
+        if estimate != queueEstimate { queueEstimate = estimate }
+
+        guard p == .readyCheck else { readyCheckHandled = false; return }
+        guard !readyCheckHandled else { return }
+        var accepted = false
+        if settings.autoAccept, let source {
+            // the check can still be opening (no response yet): try again next poll.
+            guard let response = search?.readyCheckResponse else { return }
+            readyCheckHandled = true
+            if response == "None" { accepted = await source.acceptReadyCheck() }
+        } else {
+            readyCheckHandled = true
+        }
+        onMatchFound?(accepted)
     }
 }

@@ -17,6 +17,18 @@ import Testing
     #expect(fin.state == .failed)
 }
 
+@Test func csAt10LateFirstLookInterpolatesToTheDeadline() {
+    // 66 cs at 9:50, 76 at 10:10: the deadline value is 71 (achieved), not the raw 76 scaled by pace.
+    let g = Goal(preset: .csAt10, target: 70)
+    let late = goalSnapshot(time: 610, cs: 76)
+    let p = GoalTracker.evaluate(g, snapshot: late, catalog: nil, final: false, before: (590, 66))
+    #expect(p.current.rounded() == 71)
+    #expect(p.state == .achieved)
+    let slow = GoalTracker.evaluate(g, snapshot: goalSnapshot(time: 610, cs: 70), catalog: nil, final: false,
+                                    before: (590, 60))
+    #expect(slow.state == .failed)
+}
+
 @Test func totalDeathsLocksAtFinal() {
     let g = Goal(preset: .totalDeaths, target: 5)
     let s = goalSnapshot(time: 1800, deaths: 3)
@@ -73,4 +85,27 @@ import Testing
         // a modifier pressed during a tab hold hides it
         #expect(!sample(true, true))
     }
+}
+
+@Test func csBenchmarkFollowsChosenMinute() {
+    let g = Goal(preset: .csAt10, target: 60, minutes: 8)
+    #expect(g.title == "CS at 8:00")
+    let ahead = GoalTracker.evaluate(g, snapshot: goalSnapshot(time: 300, cs: 40), catalog: nil, final: false)
+    #expect(ahead.state == .onTrack)
+    #expect(ahead.label == "40 / 60 CS \u{B7} 5:00")
+    let behind = GoalTracker.evaluate(g, snapshot: goalSnapshot(time: 300, cs: 20), catalog: nil, final: false)
+    #expect(behind.state == .pending)
+    #expect(GoalTracker.evaluate(g, snapshot: goalSnapshot(time: 490, cs: 59), catalog: nil, final: false).state == .failed)
+}
+
+@Test func oldSettingsDecodeWithDefaultMinutes() throws {
+    let json = #"{"goal":{"preset":"csAt10","target":75},"goalTargets":{"csAt10":75}}"#
+    let s = try #require(decodeSettings(json))
+    #expect(s.goal?.minutes == 10)
+    #expect(s.effectiveGoal()?.minutes == 10)
+    #expect(s.goalMinutes.isEmpty)
+    var m = s
+    m.setMinutes(12, for: .csAt10)
+    #expect(m.effectiveGoal()?.minutes == 12)
+    #expect(m.minutes(for: .totalDeaths) == nil)
 }
