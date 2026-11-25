@@ -113,3 +113,30 @@ struct ReviewLastGameRow: View {
         }
     }
 }
+
+/// a newer version is out: the install command to paste into terminal. the app never updates itself.
+struct UpdateRow: View {
+    let model: AppModel
+    let version: String
+
+    @State private var copied = false
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Update available").font(.callout.weight(.medium))
+                Text(copied ? "Paste it into Terminal." : "Version \(version)")
+                    .font(.caption)
+                    .foregroundStyle(Palette.secondaryText)
+            }
+            Spacer(minLength: 8)
+            Button(copied ? "Copied" : "Copy command") {
+                model.copyUpdateCommand()
+                copied = true
+            }
+            .controlSize(.small)
+            .help(UpdateCheck.command)
+        }
+        .onChange(of: version) { copied = false }
+    }
+}

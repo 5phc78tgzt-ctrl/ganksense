@@ -240,6 +240,7 @@ private struct GeneralSettings: View {
     @State private var loginFailed = false
     @State private var confirmDelete = false
     @State private var deleted = false
+    @State private var copiedUpdate = false
 
     var body: some View {
         SettingsSection(header: "Startup") {
@@ -275,8 +276,19 @@ private struct GeneralSettings: View {
         }
         privacy
         SettingsSection {
-            SettingRow(title: "Version") {
-                Text(Self.version).foregroundStyle(.secondary).monospacedDigit()
+            SettingRow(title: "Check for updates",
+                       hint: model.availableUpdate.map { "\(Self.version) · \($0) is available" }
+                           ?? "Version \(Self.version)") {
+                HStack(spacing: 8) {
+                    if model.availableUpdate != nil {
+                        Button(copiedUpdate ? "Copied" : "Copy command") {
+                            model.copyUpdateCommand()
+                            copiedUpdate = true
+                        }
+                        .help("Paste it into Terminal: \(UpdateCheck.command)")
+                    }
+                    SettingSwitch(isOn: model.setting(\.checkForUpdates))
+                }
             }
         }
         .onAppear { loginEnabled = LoginItem.isEnabled }
@@ -284,7 +296,7 @@ private struct GeneralSettings: View {
 
     private var privacy: some View {
         SettingsSection(header: "Privacy") {
-            Text("Stored on your Mac only: settings and your game history (date, champion, role, result, goal result, deaths with time and killer champion). Nothing is sent to ganksense. Downloads: public League data from Riot, and build suggestions from OP.GG if enabled.")
+            Text("Stored on your Mac only: settings and your game history (date, champion, role, result, goal result, deaths with time and killer champion), none of it sent to ganksense. Downloads: Riot data, OP.GG builds and the ganksense.app version check, if enabled.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

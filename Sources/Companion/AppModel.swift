@@ -31,6 +31,61 @@ final class AppModel {
     }
     private(set) var runeApply: RuneApplyStatus?
 
+    /// a newer version listed on ganksense.app; nil when up to date, unchecked or switched off.
+    private(set) var availableUpdate: String?
+    @ObservationIgnored private var updateTask: Task<Void, Never>?
+    private static let notifiedUpdateKey = "notifiedUpdateVersion"
+
+    /// nil outside an app bundle, where there is nothing to compare against.
+    static var appVersion: String? {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+    }
+
+    /// debug (--update-preview): shows the update notice without asking the site.
+    private static func previewUpdate(_ arguments: [String]) -> String? {
+        arguments.contains("--update-preview") ? "9.9.9" : nil
+    }
+
+    func copyUpdateCommand() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(UpdateCheck.command, forType: .string)
+    }
+
+    /// runs the daily check while the setting is on; called again whenever settings change.
+    private func followUpdateSetting(current: String) {
+        let enabled = withObservationTracking { coordinator.settings.checkForUpdates } onChange: { [weak self] in
+            Task { @MainActor in self?.followUpdateSetting(current: current) }
+        }
+        guard enabled != (updateTask != nil) else { return }
+        guard enabled else {
+            updateTask?.cancel()
+            updateTask = nil
+            availableUpdate = nil
+            return
+        }
+        updateTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let wait = await self?.checkForUpdate(current: current) else { return }
+                try? await Task.sleep(for: wait)
+            }
+        }
+    }
+
+    /// returns how long to wait before the next check: a day, or an hour after a failure or a postponed notice.
+    private func checkForUpdate(current: String) async -> Duration {
+        let soon = Duration.seconds(60 * 60), tomorrow = Duration.seconds(24 * 60 * 60)
+        guard let latest = await UpdateCheck.latestVersion(), !Task.isCancelled else { return soon }
+        availableUpdate = UpdateCheck.isNewer(latest, than: current) ? latest : nil
+        guard let version = availableUpdate,
+              UserDefaults.standard.string(forKey: Self.notifiedUpdateKey) != version
+        else { return tomorrow }
+        // never a banner over a game or champ select.
+        guard coordinator.phase != .inGame, !inChampSelect else { return soon }
+        notifier.notifyUpdate(version: version)
+        UserDefaults.standard.set(version, forKey: Self.notifiedUpdateKey)
+        return tomorrow
+    }
+
     /// the champ select banner with sample data (settings demo, or --popover-preview champselect).
     var champSelectPreview = false
 
@@ -126,6 +181,7 @@ final class AppModel {
             ?? FileManager.default.temporaryDirectory).appendingPathComponent(AppInfo.name, isDirectory: true)
         dataDragon = DataDragon(cacheDir: caches.appendingPathComponent("ddragon", isDirectory: true))
         isDemo = arguments.contains("--demo")
+        availableUpdate = Self.previewUpdate(arguments)
         notifier = Notifier(enabled: !isDemo)
 
         if isDemo {
@@ -166,6 +222,7 @@ final class AppModel {
             ?? FileManager.default.temporaryDirectory).appendingPathComponent(AppInfo.name, isDirectory: true)
         dataDragon = DataDragon(cacheDir: caches.appendingPathComponent("ddragon", isDirectory: true))
         isDemo = false
+        availableUpdate = Self.previewUpdate(ProcessInfo.processInfo.arguments)
         notifier = Notifier(enabled: false)
         coordinator = previewCoordinator
         watcher = DemoProcessWatcher()
@@ -198,6 +255,12 @@ final class AppModel {
             if client || game { self.clearLaunchState() }
         }
         logPhaseChanges()
+        if !isDemo, availableUpdate == nil, let current = Self.appVersion {
+            Task { [weak self] in
+                await self?.coordinator.waitForSettings()
+                self?.followUpdateSetting(current: current)
+            }
+        }
         if isDemo { demoExitWhenFinished() }
     }
 
@@ -230,6 +293,7 @@ final class AppModel {
     }
 
     func stop() {
+        updateTask?.cancel()
         watcher.stop()
         coordinator.stop()
         if let demoDirectory { try? FileManager.default.removeItem(at: demoDirectory) }

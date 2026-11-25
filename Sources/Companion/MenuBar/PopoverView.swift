@@ -14,6 +14,9 @@ struct PopoverView: View {
         GlassEffectContainer(spacing: 10) {
             VStack(alignment: .leading, spacing: 10) {
                 header
+                if let version = model.availableUpdate, coordinator.phase != .inGame {
+                    GlassSection { UpdateRow(model: model, version: version) }
+                }
                 section
                     .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.97, anchor: .top)))
             }

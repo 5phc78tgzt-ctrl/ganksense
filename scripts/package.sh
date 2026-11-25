@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # builds a release app and zips it for the curl installer into dist/: the zip (release asset), its checksum,
-# install.sh (with the release url and checksum baked in; host this one) and uninstall.sh.
+# install.sh (with the release url and checksum baked in; host this one), uninstall.sh and version.json (what the
+# app's update check reads; upload it last, once the rest is live).
 # use a per-version release url, not a latest one: the baked-in checksum only matches this exact zip.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -25,6 +26,7 @@ sed -e "s|^RELEASE_URL=\"\"|RELEASE_URL=\"$URL\"|" -e "s|^RELEASE_SHA256=\"\"|RE
 cp scripts/uninstall.sh dist/uninstall.sh
 chmod +x dist/install.sh dist/uninstall.sh
 done_line "Writing install.sh and uninstall.sh" "${URL:-no release url}"
+printf '{"version":"%s"}\n' "$VERSION" > dist/version.json
 [ -n "$URL" ] || warn_line "GANKSENSE_RELEASE_URL not set: dist/install.sh only works with GANKSENSE_URL or GANKSENSE_ZIP."
 
 printf '\n  %sganksense%s %s%s%s packaged\n\n' "$BOLD$PALE" "$RESET" "$GOLD" "$VERSION" "$RESET"
@@ -33,4 +35,5 @@ row dist/ganksense.zip "$(du -h dist/ganksense.zip | cut -f1 | tr -d ' ')"
 row dist/ganksense.zip.sha256 "$SHA"
 row dist/install.sh "host this one"
 row dist/uninstall.sh ""
+row dist/version.json "upload last"
 printf '\n'

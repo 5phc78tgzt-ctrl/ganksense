@@ -37,6 +37,16 @@ final class Notifier {
         Task { await post(title: "Match found", body: body, id: "match-found", sound: true) }
     }
 
+    /// a newer version is listed on the site. one identifier, so a newer one replaces the last.
+    func notifyUpdate(version: String) {
+        let body = "Copy the update command from the ganksense menu bar window."
+        guard enabled else {
+            AppLog.app.notice("Update available: \(version, privacy: .public)")
+            return
+        }
+        Task { await post(title: "ganksense \(version) is available", body: body, id: "update", sound: false) }
+    }
+
     private func post(title: String, body: String, id: String, sound: Bool) async {
         let center = UNUserNotificationCenter.current()
         if authorized == nil {

@@ -222,6 +222,11 @@ public final class Coordinator {
         updateSettings(s)
     }
 
+    /// returns once the stored settings are loaded (immediately if `start` was never called).
+    public func waitForSettings() async {
+        await bootTask?.value
+    }
+
     public func updateSettings(_ s: Settings) {
         let old = settings
         settings = s

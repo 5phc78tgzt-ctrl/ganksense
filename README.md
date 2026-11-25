@@ -47,6 +47,7 @@ The overlay is hidden by default. It appears when something important happens, w
 
 - **One goal per game.** Pick one before the game: deaths before 14:00, CS at 10:00, CS per minute at 20:00, kill participation, deaths this game or gold at 15:00. You can set your own targets.
 - **Tilt guard.** A calm break reminder after a loss streak or after a long session.
+- **Update notice.** When a newer version is out, the menu bar window offers the install command to copy. The app never updates itself.
 
 <p align="center"><img src="docs/images/settings-goals.png" alt="Goal targets in Settings" width="440"></p>
 
@@ -74,6 +75,8 @@ The script downloads the app, checks it, puts it in `/Applications` and opens it
 
 The app is not notarized by Apple yet, so a browser download would be blocked. A `curl` download is not. You can read the script first: [`scripts/install.sh`](scripts/install.sh).
 
+To update, run the same install command again. Your settings and history are kept.
+
 To remove the app:
 
 ```bash
@@ -92,13 +95,14 @@ ganksense only uses Riot's official local APIs and public static data. It does n
 
 - **Stored on your Mac only:** your settings and your game history (date, champion, role, result, goal result, and each death with its time and killer champion). Other players' names are never stored. Folder: `~/Library/Application Support/ganksense`
 - **Riot:** public item and champion data from `ddragon.leagueoflegends.com`.
+- **ganksense.app:** once a day the app downloads `version.json` to see if a newer version is out. The request contains no data about you or your games, though like any web request it shows your IP address. You can turn it off with "Check for updates" in Settings > General.
 - **OP.GG** (only with "Use OP.GG builds" on): your champion, role and game mode for builds; the lane opponent for matchup tips; the ARAM augment list. When you open a player's row on the scout card, that player's Riot ID and region are sent once to load their champion pool. Nothing from OP.GG is cached under a player's name.
 - **League client:** the app reads your lobby, champ select and match history from the local client. It writes to the client only to accept a match (if auto-accept is on) and to save a rune page when you click apply.
 - **Your control:** Settings > General > Privacy has "Show in Finder" and "Delete all data".
 
 ## Permissions
 
-ganksense needs no macOS permissions. It does not ask for Input Monitoring, Screen Recording or Accessibility.
+ganksense needs no macOS permissions. It does not ask for Input Monitoring, Screen Recording or Accessibility. It may ask to send notifications, which is optional.
 
 - To show the overlay while you hold **Tab**, it reads only whether the Tab key is down. Nothing is recorded.
 - To place the overlay and the champ select banner, it reads only the position of the League windows, never their contents or titles.

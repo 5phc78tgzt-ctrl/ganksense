@@ -34,6 +34,8 @@ public struct Settings: Codable, Sendable, Equatable {
     public var autoAccept = false
     /// a notification when a match is found while the client is not in front.
     public var notifyMatchFound = true
+    /// ask ganksense.app once a day whether a newer version exists.
+    public var checkForUpdates = true
     public var launchAtLogin: Bool
     public var fullscreenTipShown: Bool
 
@@ -94,7 +96,7 @@ public struct Settings: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case goal, goalTargets, goalMinutes, tilt, overlayEnabled, overlayCorner, overlayScale, useOPGG
         case launchAtLogin, fullscreenTipShown, showJunglerLine, showWhileHoldingTab, showGoldLead, bannerStyle
-        case autoAccept, notifyMatchFound
+        case autoAccept, notifyMatchFound, checkForUpdates
     }
 
     /// every key optional: a missing or unreadable value falls back to its default instead of failing the whole file.
@@ -117,6 +119,7 @@ public struct Settings: Codable, Sendable, Equatable {
         bannerStyle = (try? c.decodeIfPresent(BannerStyle.self, forKey: .bannerStyle)) ?? d.bannerStyle
         autoAccept = (try? c.decodeIfPresent(Bool.self, forKey: .autoAccept)) ?? d.autoAccept
         notifyMatchFound = (try? c.decodeIfPresent(Bool.self, forKey: .notifyMatchFound)) ?? d.notifyMatchFound
+        checkForUpdates = (try? c.decodeIfPresent(Bool.self, forKey: .checkForUpdates)) ?? d.checkForUpdates
     }
 }
 
